@@ -9,3 +9,5 @@
 - Automatic signing
 - Automatic versioning
 - Dependency Injection
+- Debugger auto placer of files
+- Auto updater
