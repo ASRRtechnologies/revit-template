@@ -21,6 +21,7 @@ namespace RevitTemplate.Common
         public Result OnStartup(UIControlledApplication application)
         {
             AddRibbonButtons(application);
+            Main.Instance.OpenLogs();
 
             return Result.Succeeded;
         }
