@@ -1,5 +1,5 @@
 <!-- TOC -->
-* [Internal NuGet Packages](#internal-nuget-pkgs)
+* [Internal NuGet Packages](#internal-nuget-packages)
 * [TODO](#todo)
 <!-- TOC -->
 
