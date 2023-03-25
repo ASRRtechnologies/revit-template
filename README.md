@@ -15,14 +15,14 @@ We're currently experimenting with using internal NuGet packages instead of subm
 2) Add ASRR's internal NuGet package repository as a source:
 - a) In Visual Studio, right-click on your solution and go to `Manage NuGet Packages for Solution`.
 - b) Click on the settings icon (:gear:) top-right. This should open a window showing Package sources. Click on the plus (:heavy_plus_sign:) button to add a new source and add the following source: `https://nuget.pkg.github.com/ASRRtechnologies/index.json`. The name can be anything, but prefer the convention `GitHub ASRR`.
-- c) Back in the NuGet manager window, change the Package source to `All` (or `GitHub ASRR` if you only wnat to see the internal packages). This should prompt you to enter your GitHub username and password (:warning: Here you have to fill in the Personal access token you generated earlier, NOT your GitHub password).
+- c) Back in the NuGet manager window, change the Package source to `All` (or `GitHub ASRR` if you only want to see the internal packages). This should prompt you to enter your GitHub username and password (:warning: Here you have to fill in the Personal access token you generated earlier, NOT your GitHub password).
 
 If everything went right, you should see our internal packages such as ASRR.Core now, and can install it as you would any other NuGet package!
 
 
 ## TODO
 - [x] Create shared project for common Revit Addin code (so just the startup and log setups etc)
-- [ ] Create an installer executable using InnoSetup
+- [x] Create an installer executable using InnoSetup
 - [ ] Auto deploy to GH repo releases
 - [ ] Automatic signing
 - [ ] Automatic versioning
