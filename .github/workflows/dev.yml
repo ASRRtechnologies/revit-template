@@ -4,20 +4,20 @@ name: Compile and run tests
 on:
   push:
     # this will cause the action to run on pushes to branches that start with the prefixes specified here
-    branches: [ develop, tests/*, features/*, docs/*, bugs/* ]
+    branches: [ dev ]
     tags:
       - 'v*' # Push events to matching v*, i.e. v1.0, v20.15.10
 
   pull_request:
-    # we'll also run this when pull requests to develop are opened
-    branches: [ develop ]
+    # we'll also run this when pull requests to dev are opened
+    branches: [ dev ]
 
 jobs:
   Build:
     # The type of runner that the job will run on
     runs-on: windows-latest
     env:
-      Solution_Name: SampleRevitAddin.sln
+      Solution_Name: RevitTemplate.sln
     outputs:
       Version: ${{ steps.gitversion.outputs.nuGetVersionV2 }}
       CommitsSinceVersionSource: ${{ steps.gitversion.outputs.CommitsSinceVersionSource }}

@@ -27,7 +27,7 @@ DisableProgramGroupPage=yes
 ; TODO: Add SignTool setup once we have a license
 ; Uncomment the following line to run in non administrative install mode (install for current user only.)
 PrivilegesRequired=lowest
-OutputDir={#installerPath}
+OutputDir=.\Output
 OutputBaseFilename=RevitTemplateAddin
 Compression=lzma
 SolidCompression=yes
