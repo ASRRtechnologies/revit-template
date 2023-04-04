@@ -144,6 +144,9 @@ publish/
 # Uncomment if necessary however generally it will be regenerated when needed
 #!**/packages/repositories.config
 
+# NuGet Config (uncomment if no sensitive info (e.g., PATs) are included)
+nuget.config
+
 # Windows Azure Build Output
 csx/
 *.build.csdef

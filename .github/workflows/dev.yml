@@ -1,4 +1,4 @@
-#dev_actions.yml
+#dev.yml
 
 name: Compile and run tests
 on:
@@ -54,8 +54,10 @@ jobs:
       - name: Setup NuGet
         uses: NuGet/setup-nuget@v1.0.5
 
-      - name: Restore nuGet packages
-        run: nuget restore $env:Solution_Name
+      - name: Restore NuGet packages
+        run: |
+          dotnet nuget add source "https://nuget.pkg.github.com/ASRRtechnologies/index.json" --name "GitHub ASRR" --username "jcathalina" --password "${{ secrets.GITHUB_TOKEN }}" --store-password-in-clear-text
+          nuget restore $env:Solution_Name
 
       - name: Run MSBuild
         id: run-msbuild
