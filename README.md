@@ -29,3 +29,5 @@ If everything went right, you should see our internal packages such as ASRR.Core
 - [ ] Dependency Injection
 - [x] Debugger auto placer of files
 - [ ] Auto updater
+- [ ] Check different types of ribbon panel icons and add some sample buttons with uniform styling
+- [ ] Standard gaia setup in template (uptime tool)
