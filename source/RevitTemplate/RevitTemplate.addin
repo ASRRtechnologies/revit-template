@@ -1,0 +1,10 @@
+﻿<RevitAddIns>
+    <AddIn Type="Application">
+        <Name>RevitTemplate</Name>
+        <Assembly>RevitTemplate/RevitTemplate.dll</Assembly>
+        <AddInId>E0A1CD18-4F33-47B7-B208-7900DBC24B2A</AddInId>
+        <FullClassName>RevitTemplate.Application</FullClassName>
+        <VendorId>ASRR</VendorId>
+        <VendorDescription>ASRR B.V., www.asrr.nl</VendorDescription>
+    </AddIn>
+</RevitAddIns>
