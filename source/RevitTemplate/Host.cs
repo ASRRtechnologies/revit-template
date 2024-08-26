@@ -1,5 +1,6 @@
 using Microsoft.Extensions.DependencyInjection;
 using RevitTemplate.Config;
+using RevitTemplate.Service;
 
 namespace RevitTemplate;
 
@@ -18,6 +19,7 @@ public static class Host
         var services = new ServiceCollection();
 
         services.AddSerilogConfiguration();
+        services.AddTransient(_ => new WallPlacer());
 
         _serviceProvider = services.BuildServiceProvider();
     }

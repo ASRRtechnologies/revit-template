@@ -19,5 +19,7 @@ public class Application : ExternalApplication
         panel.AddPushButton<PopupCommand>("Click Me!")
             .SetImage("/RevitTemplate;component/Resources/Icons/RibbonIcon16.png")
             .SetLargeImage("/RevitTemplate;component/Resources/Icons/RibbonIcon32.png");
+        
+        panel.AddPushButton<PlaceWallCommand>("Place Wall");
     }
 }
