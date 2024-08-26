@@ -18,7 +18,9 @@ public class PlaceWallCommand : IExternalCommand
         try
         {
             var wallPlacer = Host.GetService<WallPlacer>();
-            wallPlacer.Place(doc, new XYZ(0, 0, 0), 5, 5);
+            wallPlacer.Place(doc, new XYZ(0, 0, 0), 5400, 2650, 0);
+            wallPlacer.Place(doc, new XYZ(5400, -12000, 0), 5400, 2650, 180);
+            wallPlacer.Place(doc, new XYZ(5400, 0, 0), 12000, 2650, -90);
         }
         catch (Exception e)
         {
