@@ -14,13 +14,13 @@ public class PlaceWallCommand : IExternalCommand
         var uiApp = commandData.Application;
         var uidoc = uiApp.ActiveUIDocument;
         var doc = uidoc.Document;
-
+        
         try
         {
             var wallPlacer = Host.GetService<WallPlacer>();
-            wallPlacer.Place(doc, new XYZ(0, 0, 0), 5400, 2650, 0);
-            wallPlacer.Place(doc, new XYZ(5400, -12000, 0), 5400, 2650, 180);
-            wallPlacer.Place(doc, new XYZ(5400, 0, 0), 12000, 2650, -90);
+            wallPlacer.Place(doc, new XYZ(0, 0, 0), 5400, 2650, 0); // voorgevel
+            wallPlacer.Place(doc, new XYZ(5400, 12000, 0), 5400, 2650, 180); // achtergevel
+            wallPlacer.Place(doc, new XYZ(5400, 0, 0), 12000, 2650, 90); // wand rechts
         }
         catch (Exception e)
         {
