@@ -2,6 +2,7 @@
 using System.Windows;
 using Autodesk.Revit.Attributes;
 using Autodesk.Revit.UI;
+using RevitTemplate.Service;
 using RevitTemplate.UI;
 
 namespace RevitTemplate.Commands;
@@ -13,11 +14,10 @@ public class ConfigureFacadeCommand : IExternalCommand
     public Result Execute(ExternalCommandData commandData, ref string message, ElementSet elements)
     {
         var uiApp = commandData.Application;
-        var uidoc = uiApp.ActiveUIDocument;
-        var doc = uidoc.Document;
+        var facadeConfigurationService = Host.GetService<FacadeConfiguratorService>();
         
-        var manualConfigurationInput = new ManualFacadeConfigurationInput();
-        var result = manualConfigurationInput.ShowDialog();
+        var facadeConfigurationInput = new ManualFacadeConfigurationInput();
+        var result = facadeConfigurationInput.ShowDialog();
         
         if (result != true)
         {
@@ -26,7 +26,7 @@ public class ConfigureFacadeCommand : IExternalCommand
         
         try
         {
-            MessageBox.Show($"FacadeConfigurationId Given: {manualConfigurationInput.FacadeConfigurationId}");
+            facadeConfigurationService.Configure(uiApp, facadeConfigurationInput.FacadeConfigurationId);
         }
         catch (ConfigurationException e)
         {
