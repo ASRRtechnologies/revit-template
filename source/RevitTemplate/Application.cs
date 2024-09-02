@@ -21,5 +21,7 @@ public class Application : ExternalApplication
             .SetLargeImage("/RevitTemplate;component/Resources/Icons/RibbonIcon32.png");
         
         panel.AddPushButton<PlaceWallCommand>("Place Wall");
+
+        panel.AddPushButton<ConfigureFacadeCommand>("Configure Facade");
     }
 }

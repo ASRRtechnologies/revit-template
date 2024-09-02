@@ -1,11 +1,10 @@
+using System.Net.Http;
 using ASRR.Core.Persistence;
+using ASRR.Revit.Core.Http;
 using Microsoft.Extensions.DependencyInjection;
 using RevitTemplate.Config;
 using RevitTemplate.Service;
 using RevitTemplate.Settings;
-using System.Net.Http;
-using ASRR.Revit.Core.Http;
-using Serilog;
 
 namespace RevitTemplate;
 
@@ -16,25 +15,27 @@ public static class Host
 {
     private static IServiceProvider _serviceProvider;
 
-    private static readonly IPersistentStorageProvider persistentStorageProvider =
+    private static readonly IPersistentStorageProvider PersistentStorageProvider =
         new JsonBasedPersistenceProvider(typeof(Host).Namespace);
 
     private static HttpClient _httpClient;
-    
+
     /// <summary>
     ///     Starts the host and configures the application's services
     /// </summary>
     public static void Start()
     {
         var services = new ServiceCollection();
-        
+
         services.AddSerilogConfiguration();
-        
-        // Setup http
+
+        // Setup storage and http services
         SetupHttpClient();
-        services.AddTransient(_ => persistentStorageProvider);
+        services.AddTransient(_ => PersistentStorageProvider);
         services.AddTransient(_ => new HttpService(_httpClient));
-        
+
+        // Add configurator services
+        services.AddFacadeConfigurator();
         services.AddTransient(_ => new WallPlacer());
 
         _serviceProvider = services.BuildServiceProvider();
@@ -52,8 +53,16 @@ public static class Host
 
     private static void SetupHttpClient()
     {
-        var databaseSettings = persistentStorageProvider.Fetch<DatabaseSettings>();
-        _httpClient = new HttpClient {BaseAddress = new Uri(databaseSettings.BaseUrl) };
+        var databaseSettings = PersistentStorageProvider.Fetch<DatabaseSettings>();
+        _httpClient = new HttpClient {BaseAddress = new Uri(databaseSettings.BaseUrl)};
         _httpClient.DefaultRequestHeaders.Add("X-API-Key", databaseSettings.ApiKey);
+    }
+
+    private static void AddFacadeConfigurator(this IServiceCollection services)
+    {
+        services.AddTransient(_ => new FacadeConfiguratorService(
+            GetService<HttpService>(),
+            @"C:\asrr\resources\RevitTemplate",
+            @"C:\asrr\output\RevitTemplate"));
     }
 }
