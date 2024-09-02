@@ -1,3 +1,4 @@
+using ASRR.Core.Persistence;
 using Microsoft.Extensions.DependencyInjection;
 using RevitTemplate.Config;
 using RevitTemplate.Service;
@@ -17,7 +18,7 @@ public static class Host
     public static void Start()
     {
         var services = new ServiceCollection();
-
+        
         services.AddSerilogConfiguration();
         services.AddTransient(_ => new WallPlacer());
 
