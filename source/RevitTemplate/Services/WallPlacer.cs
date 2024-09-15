@@ -1,4 +1,4 @@
-﻿namespace RevitTemplate.Service;
+﻿namespace RevitTemplate.Services;
 
 public class WallPlacer
 {
