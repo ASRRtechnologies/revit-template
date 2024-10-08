@@ -1,8 +1,10 @@
-﻿namespace RevitTemplate.Services;
+﻿using ASRR.Revit.Core.Warnings;
+
+namespace RevitTemplate.Services;
 
 public class WallPlacer
 {
-    public void Place(Document doc, XYZ position, double width, double height, double rotation)
+    public Wall Place(Document doc, XYZ position, double width, double height, double rotation)
     {
         var levels = new FilteredElementCollector(doc)
             .WhereElementIsNotElementType()
@@ -18,7 +20,7 @@ public class WallPlacer
 
         var wallType = wallTypes.FirstElement() as WallType;
 
-        using var transaction = new Transaction(doc);
+        using var transaction = WarningDiscardFailuresPreprocessor.GetTransaction(doc);
         transaction.Start("Create Wall");
 
         var startPosition = ConvertMmToFeet(position);
@@ -34,6 +36,7 @@ public class WallPlacer
         }
 
         transaction.Commit();
+        return created;
     }
 
     public bool RotateWall(Element element, double degrees)
@@ -54,21 +57,26 @@ public class WallPlacer
 
     public bool CreateOpening(Document doc, Wall wall, XYZ position, double width, double height, double rotation)
     {
-        var endPoint = new XYZ(position.X + width, position.Y, position.Z + height);
+        using var transaction = WarningDiscardFailuresPreprocessor.GetTransaction(doc);
+        transaction.Start("Place opening");
+        var startPosition = ConvertMmToFeet(position);
+        var endPoint = new XYZ(startPosition.X + ConvertMmToFeet(width), startPosition.Y, startPosition.Z + ConvertMmToFeet(height));
         // todo: validate points are in wall
         try
         {
-            var opening = doc.Create.NewOpening(wall, position, endPoint);
+            var opening = doc.Create.NewOpening(wall, startPosition, endPoint);
             
             if (rotation != 0.0)
             {
                 RotateWall(opening, rotation);
             }
 
+            transaction.Commit();
             return true;
         }
         catch (Exception ex)
         {
+            transaction.Commit();
             return false;
         }
     }
