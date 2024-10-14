@@ -1,8 +1,10 @@
 ﻿using System.Configuration;
 using System.Windows;
+using ASRR.Core.Persistence;
 using Autodesk.Revit.Attributes;
 using Autodesk.Revit.UI;
 using RevitTemplate.Services;
+using RevitTemplate.Settings;
 using RevitTemplate.UI;
 
 namespace RevitTemplate.Commands;
@@ -15,6 +17,8 @@ public class ConfigureFacadeCommand : IExternalCommand
     {
         var uiApp = commandData.Application;
         var facadeConfigurationService = Host.GetService<FacadeConfiguratorService>();
+        var persistentStorageProvider = Host.GetService<IPersistentStorageProvider>();
+        var exportSettings = persistentStorageProvider.Fetch<ExportSettings>();
         
         var facadeConfigurationInput = new ManualFacadeConfigurationInput();
         var result = facadeConfigurationInput.ShowDialog();
@@ -26,7 +30,7 @@ public class ConfigureFacadeCommand : IExternalCommand
         
         try
         {
-            facadeConfigurationService.Configure(uiApp, facadeConfigurationInput.FacadeConfigurationId);
+            facadeConfigurationService.Configure(uiApp, facadeConfigurationInput.FacadeConfigurationId, exportSettings);
         }
         catch (ConfigurationException e)
         {

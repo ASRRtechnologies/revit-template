@@ -5,6 +5,7 @@ using ASRR.Revit.Core.Utilities;
 using Autodesk.Revit.UI;
 using RevitTemplate.Dto;
 using RevitTemplate.Exceptions;
+using RevitTemplate.Settings;
 using ModelPlacer = RevitTemplate.ModelPlacerTemp.ModelPlacer;
 
 namespace RevitTemplate.Services;
@@ -15,6 +16,7 @@ public class FacadeConfiguratorService
     private readonly ModelFetcher _modelFetcher;
     private readonly WallPlacer _wallPlacer;
     private readonly ModelPlacer _modelPlacer;
+    private readonly FileUploader _fileUploader;
     private readonly string _modelDestinationFolder;
     private readonly string _configurationOutputFolder;
 
@@ -25,6 +27,7 @@ public class FacadeConfiguratorService
         _modelFetcher = new ModelFetcher(_httpService);
         _wallPlacer = new WallPlacer();
         _modelPlacer = new ModelPlacer();
+        _fileUploader = new FileUploader(_httpService);
         _modelDestinationFolder =
             modelDestinationFolder ?? throw new ArgumentNullException(nameof(modelDestinationFolder));
         _configurationOutputFolder = configurationOutputFolder ??
@@ -33,7 +36,7 @@ public class FacadeConfiguratorService
         Directory.CreateDirectory(_configurationOutputFolder);
     }
 
-    public void Configure(UIApplication uiApp, string configId)
+    public void Configure(UIApplication uiApp, string configId, ExportSettings exportSettings)
     {
         if (configId == null)
         {
@@ -47,9 +50,9 @@ public class FacadeConfiguratorService
         var storedElements = FetchElementModels(configuration.Openings);
         var storedMaterials = FetchMaterialModels(configuration.Planes);
 
-        using (var newDoc = uiApp.Application.NewProjectDocument(@"C:\asrr\Template1.rte"))
+        using (var newDoc = uiApp.Application.NewProjectDocument(exportSettings.TemplateFilePath))
         {
-            var wall = _wallPlacer.Place(newDoc, new XYZ(0,0,0), 5400, 2650, 0.0);
+            var wall = _wallPlacer.Place(newDoc, new XYZ(0,0,0), configuration.Dimensions.X, configuration.Dimensions.Y, 0.0);
             foreach (var opening in configuration.Openings)
             {
                 var position = new XYZ(opening.Position.X, opening.Position.Z, opening.Position.Y);
@@ -61,7 +64,11 @@ public class FacadeConfiguratorService
             SaveRevitFile(newDoc, configuration);
             newDoc.Close();
         }
-        
+
+        if (exportSettings.UploadToDb)
+        {
+            _fileUploader.Upload(configId, exportSettings);
+        }
 
         // Console.WriteLine(configuration.Name);
         // Console.WriteLine(configuration.Openings.First().Name);
