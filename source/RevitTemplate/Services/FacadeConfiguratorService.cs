@@ -17,10 +17,8 @@ public class FacadeConfiguratorService
     private readonly ModelPlacer _modelPlacer;
     private readonly FileUploader _fileUploader;
     private readonly string _modelDestinationFolder;
-    private readonly string _configurationOutputFolder;
 
-    public FacadeConfiguratorService(HttpService httpService, string modelDestinationFolder,
-        string configurationOutputFolder)
+    public FacadeConfiguratorService(HttpService httpService, string modelDestinationFolder)
     {
         _httpService = httpService ?? new HttpService();
         _modelFetcher = new ModelFetcher(_httpService);
@@ -29,51 +27,49 @@ public class FacadeConfiguratorService
         _fileUploader = new FileUploader(_httpService);
         _modelDestinationFolder =
             modelDestinationFolder ?? throw new ArgumentNullException(nameof(modelDestinationFolder));
-        _configurationOutputFolder = configurationOutputFolder ??
-                                     throw new ArgumentNullException(nameof(configurationOutputFolder));
         Directory.CreateDirectory(_modelDestinationFolder);
-        Directory.CreateDirectory(_configurationOutputFolder);
     }
 
     public void Configure(UIApplication uiApp, string configId, ExportSettings exportSettings)
     {
         if (configId == null)
         {
-            // TODO: log
-            throw new FacadeConfigurationException("Facade configuration failed. ConfigurationId is null");
+            throw new ConfigurationFailedException("Facade configuration failed. ConfigurationId is null");
         }
 
-        var configuration =
-            _httpService.GetForObject<FacadeConfigurationDto>($"/facade-configurations/find/{configId}");
+        var configuration = _httpService.GetForObject<FacadeConfigurationDto>($"/facade-configurations/find/{configId}")
+                            ?? throw new ConfigurationFailedException(
+                                $"Facade configuration failed. Failed to fetch configuration with id '{configId}' from db");
 
         var storedElements = FetchElementModels(configuration.Openings);
         var storedMaterials = FetchMaterialModels(configuration.Planes);
 
+        if (exportSettings.TemplateFilePath == null)
+        {
+            // TODO: Update db status
+            throw new ConfigurationFailedException("Facade configuration failed. Template file path not found.");
+        }
+
         using (var newDoc = uiApp.Application.NewProjectDocument(exportSettings.TemplateFilePath))
         {
-            var wall = _wallPlacer.Place(newDoc, new XYZ(0,0,0), configuration.Dimensions.X, configuration.Dimensions.Y, 0.0);
+            var wall = _wallPlacer.Place(newDoc, new XYZ(0, 0, 0), configuration.Dimensions.X,
+                configuration.Dimensions.Y);
+            
             foreach (var opening in configuration.Openings)
             {
                 var position = new XYZ(opening.Position.X, opening.Position.Z, opening.Position.Y);
-                _wallPlacer.CreateOpening(newDoc, wall, position, opening.Width, opening.Height, 0.0);
+                _wallPlacer.CreateOpening(newDoc, wall, position, opening.Width, opening.Height);
                 var filePath = storedElements[opening.ElementId];
-                _modelPlacer.Place(newDoc, filePath, position, new XYZ(0,0,0), 0);
+                _modelPlacer.Place(newDoc, filePath, position, new XYZ(0, 0, 0), 0);
             }
-            
-            SaveRevitFile(newDoc, configuration);
-            newDoc.Close();
+
+            var exportFolder = SaveRevitFile(newDoc, configuration, exportSettings.ExportDirectory);
         }
 
         if (exportSettings.UploadToDb)
         {
             _fileUploader.Upload(configId, exportSettings);
         }
-
-        // Console.WriteLine(configuration.Name);
-        // Console.WriteLine(configuration.Openings.First().Name);
-        // Console.WriteLine(configuration.Openings.First().Position.X);
-        // Console.WriteLine(configuration.Openings.First().Height);
-        // Console.WriteLine(configuration.Openings.First().Width);
     }
 
     private Dictionary<string, string> FetchElementModels(List<OpeningDto> openings)
@@ -83,7 +79,7 @@ public class FacadeConfiguratorService
                 openings.Select(o => o.ElementId));
 
         var storedElements = new Dictionary<string, string>();
-        
+
         foreach (var element in elements)
         {
             if (element.Files == null || !element.Files.Any())
@@ -91,31 +87,31 @@ public class FacadeConfiguratorService
                 // _logger.Error($"No files found for element '{element.Name}'. Skipping download..");
                 continue;
             }
-            
+
             var rvtFile = element.Files.FirstOrDefault(f => f.Extension == "rvt");
-            
+
             if (rvtFile == null)
             {
                 // _logger.Error($"No rvt file found for element '{element.Name}'. Skipping download..");
                 continue;
             }
-            
+
             var fileName = $"{element.Name}.rvt";
             var fetchPath = $"/blob-storage/download/{rvtFile.BlobId}/{fileName}";
             var destinationPath = Path.Combine(_modelDestinationFolder, fileName);
-            
+
             if (File.Exists(destinationPath) && (File.GetLastWriteTime(destinationPath) > rvtFile.Created))
             {
                 storedElements[element.Id] = destinationPath;
                 continue;
             }
-            
+
             if (_modelFetcher.Fetch(fetchPath, destinationPath)) storedElements[element.Id] = destinationPath;
         }
 
         return storedElements;
     }
-    
+
     private Dictionary<string, string> FetchMaterialModels(List<PlaneDto> planes)
     {
         // TODO: dto wordt anders
@@ -124,7 +120,7 @@ public class FacadeConfiguratorService
                 planes.Select(o => o.MaterialId));
 
         var storedMaterials = new Dictionary<string, string>();
-        
+
         foreach (var material in materials)
         {
             if (material.TextureFile == null)
@@ -134,32 +130,39 @@ public class FacadeConfiguratorService
             }
 
             var rvtFile = (material.TextureFile.Extension == "rvt") ? material.TextureFile : null;
-            
+
             if (rvtFile == null)
             {
                 // _logger.Error($"No rvt file found for material '{material.Name}'. Skipping download..");
                 continue;
             }
-            
+
             var fileName = $"{material.Name}.rvt";
             var fetchPath = $"/blob-storage/download/{rvtFile.BlobId}/{fileName}";
             var destinationPath = Path.Combine(_modelDestinationFolder, fileName);
-            
+
             if (File.Exists(destinationPath) && (File.GetLastWriteTime(destinationPath) > rvtFile.Created))
             {
                 storedMaterials[material.Id] = destinationPath;
                 continue;
             }
-            
+
             if (_modelFetcher.Fetch(fetchPath, destinationPath)) storedMaterials[material.Id] = destinationPath;
         }
 
         return storedMaterials;
     }
-    
-    private string SaveRevitFile(Document doc, FacadeConfigurationDto configuration)
+
+    private string SaveRevitFile(Document doc, FacadeConfigurationDto configuration, string exportDirectory)
     {
-        var exportFolder = Path.Combine(_configurationOutputFolder, configuration.Id);
+        if (exportDirectory == null)
+        {
+            // TODO: Update db status
+            throw new ConfigurationFailedException("Cannot save revit file. No export directory is given.");
+        }
+
+        Directory.CreateDirectory(exportDirectory);
+        var exportFolder = Path.Combine(exportDirectory, configuration.Id);
 
         if (Directory.Exists(exportFolder))
             Directory.Delete(exportFolder, true);
@@ -173,7 +176,6 @@ public class FacadeConfiguratorService
         options.OverwriteExistingFile = true;
 
         doc.SaveAs(rvtFilePath, options);
-        FileUtilities.RemoveBackUpFilesFromDirectory(exportFolder);
         // _logger.Info($"Saved Revit file at '{rvtFilePath}'");
 
         // status.UpdateProgress("Exporting views to pdf", 80);
@@ -182,26 +184,32 @@ public class FacadeConfiguratorService
         // status.UpdateProgress("Exporting ifc", 90);
         // _ifcExporter.Export(doc, exportFolder, configuration);
 
+        doc.Close();
+        FileUtilities.RemoveBackUpFilesFromDirectory(exportFolder);
         return exportFolder;
     }
-    
+
     private static void SavePdf(Document doc, string exportFolder, FacadeConfigurationDto configuration)
     {
-        var collector = new FilteredElementCollector(doc).OfClass(typeof(ViewSheet));
-        var viewPlans = collector.Cast<ViewSheet>().Where(view => view.Name.StartsWith("")).ToList();
         var pdfExportOptions = new PDFExportOptions();
         pdfExportOptions.FileName = $"{configuration.Name}_{DateTime.Now:yyyy-MM-dd}";
+
         try
         {
+            var collector = new FilteredElementCollector(doc).OfClass(typeof(ViewSheet));
+            var viewPlans = collector.Cast<ViewSheet>().Where(view => view.Name.StartsWith("")).ToList();
+            
             doc.Export(
                 exportFolder,
                 viewPlans.Select(v => v.Id).ToList(),
                 pdfExportOptions
             );
         }
-        catch (Exception e)
+        catch (Exception)
         {
             doc.Close();
+            FileUtilities.RemoveBackUpFilesFromDirectory(exportFolder);
+            throw;
         }
     }
 }

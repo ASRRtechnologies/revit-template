@@ -1,45 +1,71 @@
-﻿using ASRR.Revit.Core.Warnings;
+﻿using ASRR.Revit.Core.Model;
+using ASRR.Revit.Core.Utilities;
+using ASRR.Revit.Core.Warnings;
+using RevitTemplate.Exceptions;
 
 namespace RevitTemplate.Services;
 
 public class WallPlacer
 {
-    public Wall Place(Document doc, XYZ position, double width, double height, double rotation)
+    public Wall Place(Document doc, XYZ position, double width, double height, XYZ rotation = null)
     {
         var levels = new FilteredElementCollector(doc)
             .WhereElementIsNotElementType()
             .OfCategory(BuiltInCategory.INVALID)
             .OfClass(typeof(Level));
 
-        var firstLevel = levels.FirstElement() as Level;
+        if (levels.FirstElement() is not Level firstLevel)
+        {
+            throw new ConfigurationFailedException("No level found in document");
+        }
 
         var wallTypes = new FilteredElementCollector(doc)
             .WhereElementIsElementType()
             .OfCategory(BuiltInCategory.OST_Walls)
             .OfClass(typeof(WallType));
 
-        var wallType = wallTypes.FirstElement() as WallType;
+        if (wallTypes.FirstElement() is not WallType wallType)
+        {
+            throw new ConfigurationFailedException("No wall type found in document");
+        }
 
         using var transaction = WarningDiscardFailuresPreprocessor.GetTransaction(doc);
         transaction.Start("Create Wall");
 
-        var startPosition = ConvertMmToFeet(position);
-        var endPosition = ConvertMmToFeet(new XYZ(position.X + width, position.Y, position.Z));
+        var startPosition = CoordinateUtilities.ConvertMmToFeet(position);
+        var endPosition = CoordinateUtilities.ConvertMmToFeet(new XYZ(position.X + width, position.Y, position.Z));
         var line = Line.CreateBound(startPosition, endPosition);
 
-        var created = Wall.Create(doc, line, wallType.Id, firstLevel.Id, ConvertMmToFeet(height), 0, false, true);
-        // CreateOpening(doc, created, ConvertMmToFeet(new XYZ(startPosition.X + 1200, startPosition.Y, startPosition.Z + 1200)), ConvertMmToFeet(200), ConvertMmToFeet(200), rotation);
-
-        if (rotation != 0.0)
+        try
         {
-            RotateWall(created, rotation);
-        }
+            var created = Wall.Create(
+                doc,
+                line,
+                wallType.Id,
+                firstLevel.Id,
+                CoordinateUtilities.ConvertMmToFeet(height),
+                0,
+                false,
+                true);
 
-        transaction.Commit();
-        return created;
+
+            var vectorRotation = new VectorRotation(rotation);
+            if (vectorRotation.RotationInDegrees != 0.0)
+            {
+                RotateWall(created, vectorRotation);
+            }
+
+            transaction.Commit();
+            return created;
+        }
+        catch (Exception)
+        {
+            transaction.Commit();
+            throw;
+        }
     }
 
-    public bool RotateWall(Element element, double degrees)
+    public bool RotateWall(Element element, VectorRotation rotation)
     {
         var rotated = false;
 
@@ -49,57 +75,37 @@ public class WallPlacer
             var aa = line.GetEndPoint(0);
             var cc = new XYZ(aa.X, aa.Y, aa.Z + 10);
             var axis = Line.CreateBound(aa, cc);
-            rotated = curve.Rotate(axis, ConvertToRadians(degrees));
+            rotated = curve.Rotate(axis, rotation.RotationInRadians);
         }
 
         return rotated;
     }
 
-    public bool CreateOpening(Document doc, Wall wall, XYZ position, double width, double height, double rotation)
+    public void CreateOpening(Document doc, Wall wall, XYZ position, double width, double height, XYZ rotation = null)
     {
         using var transaction = WarningDiscardFailuresPreprocessor.GetTransaction(doc);
-        transaction.Start("Place opening");
-        var startPosition = ConvertMmToFeet(position);
-        var endPoint = new XYZ(startPosition.X + ConvertMmToFeet(width), startPosition.Y, startPosition.Z + ConvertMmToFeet(height));
-        // todo: validate points are in wall
+        transaction.Start("Create opening");
+        
+        var vectorRotation = new VectorRotation(rotation);
+        var startPosition = CoordinateUtilities.ConvertMmToFeet(position);
+        var endPosition =
+            CoordinateUtilities.ConvertMmToFeet(new XYZ(position.X + width, position.Y, position.Z + height));
+        
         try
         {
-            var opening = doc.Create.NewOpening(wall, startPosition, endPoint);
-            
-            if (rotation != 0.0)
+            var opening = doc.Create.NewOpening(wall, startPosition, endPosition);
+
+            if (vectorRotation.RotationInDegrees != 0.0)
             {
-                RotateWall(opening, rotation);
+                // TODO
             }
 
             transaction.Commit();
-            return true;
         }
-        catch (Exception ex)
+        catch (Exception)
         {
             transaction.Commit();
-            return false;
+            throw;
         }
-    }
-
-    // temp utils
-    public static XYZ ConvertMmToFeet(XYZ vector)
-    {
-        return new XYZ
-        (
-            ConvertMmToFeet(vector.X),
-            ConvertMmToFeet(vector.Y),
-            ConvertMmToFeet(vector.Z)
-        );
-    }
-
-    public static double ConvertMmToFeet(double millimeterValue)
-    {
-        return UnitUtils.Convert(millimeterValue, UnitTypeId.Millimeters,
-            UnitTypeId.Feet);
-    }
-
-    private static double ConvertToRadians(double angle)
-    {
-        return Math.PI / 180 * angle;
     }
 }

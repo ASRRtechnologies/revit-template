@@ -61,10 +61,8 @@ public static class Host
 
     private static void AddFacadeConfigurator(this IServiceCollection services)
     {
-        var exportSettings = PersistentStorageProvider.Fetch<ExportSettings>();
         services.AddTransient(_ => new FacadeConfiguratorService(
             GetService<HttpService>(),
-            @"C:\asrr\resources\RevitTemplate",
-            exportSettings.ExportDirectory));
+            @"C:\asrr\resources\RevitTemplate"));
     }
 }

@@ -12,7 +12,8 @@ public class FileUploader(HttpService httpService)
     public void Upload(string configId, ExportSettings exportSettings)
     {
         if (configId == null) throw new ArgumentNullException(nameof(configId));
-        if (exportSettings.ExportDirectory == null) throw new ArgumentNullException(nameof(exportSettings.ExportDirectory));
+        if (exportSettings.ExportDirectory == null)
+            throw new ArgumentNullException(nameof(exportSettings.ExportDirectory));
         // exportDirectory = C:\asrr\output\RevitTemplate
         // configDirectory = C:\asrr\output\RevitTemplate\AAABkbdcywLa5lfL
         var configDirectory = Path.Combine(exportSettings.ExportDirectory, configId);
@@ -23,7 +24,7 @@ public class FileUploader(HttpService httpService)
             // _logger.Error("No files found to upload for facade configuration '{configId}'");
             return;
         }
-        
+
         // _logger.Info($"Uploading {paths.Count} files to facade configuration '{configId}'");
         foreach (var path in paths)
         {
@@ -47,17 +48,18 @@ public class FileUploader(HttpService httpService)
         var content = GetFileContent(filePath);
 
         var response = httpService.Post(uploadPath, content);
-        
+
         if (response.IsSuccessStatusCode) return true;
         if (response.StatusCode == HttpStatusCode.NotFound)
         {
             // _logger.Error($"Facade configuration '{configId}' not found in database");
             return false;
         }
+
         // _logger.Error($"Failed to upload file '{Path.GetFileName(filePath)}' to facade configuration '{{configId}}'. Reason: {response.StatusCode} - {response.ReasonPhrase}");
         return false;
     }
-    
+
     private static List<string> GetFilePaths(string directory, ExportSettings exportSettings)
     {
         var ext = new List<string>();
@@ -71,20 +73,19 @@ public class FileUploader(HttpService httpService)
 
         return filePaths;
     }
-    
+
     private static MultipartFormDataContent GetFileContent(string filePath)
     {
-        if (File.Exists(@filePath))
+        if (!File.Exists(@filePath))
+            throw new FileNotFoundException($"Failed to upload: '{filePath}' does not exist");
+        
+        var content = new ByteArrayContent(File.ReadAllBytes(filePath));
+        return new MultipartFormDataContent
         {
-            return new MultipartFormDataContent
-            {
-                {new ByteArrayContent(File.ReadAllBytes(filePath)), "file", Path.GetFileName(filePath)}
-            };
-        }
-
-        throw new FileNotFoundException($"Failed to upload: '{filePath}' does not exist");
+            {content, "file", Path.GetFileName(filePath)}
+        };
     }
-    
+
     private static string GetFileType(string filePath)
     {
         var extension = Path.GetExtension(filePath);
