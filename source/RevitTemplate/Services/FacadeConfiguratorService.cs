@@ -6,7 +6,6 @@ using Autodesk.Revit.UI;
 using RevitTemplate.Dto;
 using RevitTemplate.Exceptions;
 using RevitTemplate.Settings;
-using ModelPlacer = RevitTemplate.ModelPlacerTemp.ModelPlacer;
 
 namespace RevitTemplate.Services;
 
