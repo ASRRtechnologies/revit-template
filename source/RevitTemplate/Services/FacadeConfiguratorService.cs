@@ -1,8 +1,11 @@
 ﻿using System.IO;
+using System.Net.Http;
+using System.Text;
 using ASRR.Revit.Core.Http;
 using ASRR.Revit.Core.RevitModel;
 using ASRR.Revit.Core.Utilities;
 using Autodesk.Revit.UI;
+using Newtonsoft.Json;
 using RevitTemplate.Dto;
 using RevitTemplate.Exceptions;
 using RevitTemplate.Settings;
@@ -41,35 +44,77 @@ public class FacadeConfiguratorService
                             ?? throw new ConfigurationFailedException(
                                 $"Facade configuration failed. Failed to fetch configuration with id '{configId}' from db");
 
+        var startResponse = _httpService.Post($"/facade-configurations/generation/start/{configId}", null);
+        if (!startResponse.IsSuccessStatusCode)
+        {
+            throw new ConfigurationFailedException(
+                "Failed to start configuration. Make sure configuration is not already in progress");
+        }
+
+        var status = new FacadeConfigurationStatus();
+        try
+        {
+            Configure(uiApp, configuration, exportSettings, status);
+        }
+        catch (Exception e)
+        {
+            var exception = new ConfigurationExceptionDto
+            {
+                Message = e.Message,
+                StackTrace = e.StackTrace,
+                Type = e.GetType().Name
+            };
+            status.Exception = exception;
+            PostStatus(configId, status);
+            throw;
+        }
+    }
+
+    private void Configure(UIApplication uiApp, FacadeConfigurationDto configuration, ExportSettings exportSettings,
+        FacadeConfigurationStatus status)
+    {
+        var configId = configuration.Id;
+        var progress = 10;
+        UpdateStatus(configId, status, "Fetching models", progress);
         var storedElements = FetchElementModels(configuration.Openings);
+        
+        UpdateStatus(configId, status, "Fetching materials", progress += 10); // == 20
         var storedMaterials = FetchMaterialModels(configuration.Planes);
 
         if (exportSettings.TemplateFilePath == null)
         {
-            // TODO: Update db status
             throw new ConfigurationFailedException("Facade configuration failed. Template file path not found.");
         }
 
         using (var newDoc = uiApp.Application.NewProjectDocument(exportSettings.TemplateFilePath))
         {
+            UpdateStatus(configId, status, "Placing wall", progress += 10); // == 30
             var wall = _wallPlacer.Place(newDoc, new XYZ(0, 0, 0), configuration.Dimensions.X,
                 configuration.Dimensions.Y);
-            
+
+            UpdateStatus(configId, status, "Placing openings", progress += 5); // == 35
             foreach (var opening in configuration.Openings)
             {
                 var position = new XYZ(opening.Position.X, opening.Position.Z, opening.Position.Y);
                 _wallPlacer.CreateOpening(newDoc, wall, position, opening.Width, opening.Height);
                 var filePath = storedElements[opening.ElementId];
                 _modelPlacer.Place(newDoc, filePath, position, new XYZ(0, 0, 0), 0);
+                UpdateStatus(configId, status, progress += 50 / configuration.Openings.Count);
             }
 
-            var exportFolder = SaveRevitFile(newDoc, configuration, exportSettings.ExportDirectory);
+            // TODO: UpdateStatus(configId, status, "Placing materials", 60);
+            
+            UpdateStatus(configId, status, "Saving Revit file", 85);
+            SaveRevitFile(newDoc, configuration, exportSettings.ExportDirectory);
         }
 
         if (exportSettings.UploadToDb)
         {
+            UpdateStatus(configId, status, "Uploading files", 95);
             _fileUploader.Upload(configId, exportSettings);
         }
+        
+        UpdateStatus(configId, status, "Configuration complete", 100, true);
     }
 
     private Dictionary<string, string> FetchElementModels(List<OpeningDto> openings)
@@ -157,7 +202,6 @@ public class FacadeConfiguratorService
     {
         if (exportDirectory == null)
         {
-            // TODO: Update db status
             throw new ConfigurationFailedException("Cannot save revit file. No export directory is given.");
         }
 
@@ -198,7 +242,7 @@ public class FacadeConfiguratorService
         {
             var collector = new FilteredElementCollector(doc).OfClass(typeof(ViewSheet));
             var viewPlans = collector.Cast<ViewSheet>().Where(view => view.Name.StartsWith("")).ToList();
-            
+
             doc.Export(
                 exportFolder,
                 viewPlans.Select(v => v.Id).ToList(),
@@ -211,5 +255,27 @@ public class FacadeConfiguratorService
             FileUtilities.RemoveBackUpFilesFromDirectory(exportFolder);
             throw;
         }
+    }
+
+    private void UpdateStatus(string configId, FacadeConfigurationStatus status, double progress = 0.0)
+    {
+        status.Progress = progress;
+        PostStatus(configId, status);
+    }
+    
+    private void UpdateStatus(string configId, FacadeConfigurationStatus status, string message = null,
+        double progress = 0.0, bool finished = false)
+    {
+        status.Message = message;
+        status.Progress = progress;
+        status.Finished = finished;
+        PostStatus(configId, status);
+    }
+
+    private void PostStatus(string configId, FacadeConfigurationStatus status)
+    {
+        var payload = JsonConvert.SerializeObject(status);
+        var httpContent = new StringContent(payload, Encoding.UTF8, "application/json");
+        _httpService.Post($"/facade-configurations/generation/status/{configId}", httpContent);
     }
 }
