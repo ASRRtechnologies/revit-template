@@ -63,6 +63,7 @@ public static class Host
     {
         services.AddTransient(_ => new FacadeConfiguratorService(
             GetService<HttpService>(),
-            @"C:\asrr\resources\RevitTemplate"));
+            @"C:\asrr\resources\RevitTemplate\models",
+            @"C:\asrr\resources\RevitTemplate\materials"));
     }
 }

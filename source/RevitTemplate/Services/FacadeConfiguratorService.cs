@@ -20,8 +20,10 @@ public class FacadeConfiguratorService
     private readonly ModelPlacer _modelPlacer;
     private readonly FileUploader _fileUploader;
     private readonly string _modelDestinationFolder;
+    private readonly string _materialDestinationFolder;
 
-    public FacadeConfiguratorService(HttpService httpService, string modelDestinationFolder)
+    public FacadeConfiguratorService(HttpService httpService, string modelDestinationFolder,
+        string materialDestinationFolder)
     {
         _httpService = httpService ?? new HttpService();
         _modelFetcher = new ModelFetcher(_httpService);
@@ -30,7 +32,10 @@ public class FacadeConfiguratorService
         _fileUploader = new FileUploader(_httpService);
         _modelDestinationFolder =
             modelDestinationFolder ?? throw new ArgumentNullException(nameof(modelDestinationFolder));
+        _materialDestinationFolder =
+            materialDestinationFolder ?? throw new ArgumentNullException(nameof(materialDestinationFolder));
         Directory.CreateDirectory(_modelDestinationFolder);
+        Directory.CreateDirectory(_materialDestinationFolder);
     }
 
     public void Configure(UIApplication uiApp, string configId, ExportSettings exportSettings)
@@ -77,7 +82,7 @@ public class FacadeConfiguratorService
         var progress = 10;
         UpdateStatus(configId, status, "Fetching models", progress);
         var storedElements = FetchElementModels(configuration.Openings);
-        
+
         UpdateStatus(configId, status, "Fetching materials", progress += 10); // == 20
         var storedMaterials = FetchMaterialModels(configuration.Planes);
 
@@ -95,15 +100,19 @@ public class FacadeConfiguratorService
             UpdateStatus(configId, status, "Placing openings", progress += 5); // == 35
             foreach (var opening in configuration.Openings)
             {
-                var position = new XYZ(opening.Position.X, opening.Position.Z, opening.Position.Y);
-                _wallPlacer.CreateOpening(newDoc, wall, position, opening.Width, opening.Height);
-                var filePath = storedElements[opening.ElementId];
-                _modelPlacer.Place(newDoc, filePath, position, new XYZ(0, 0, 0), 0);
-                UpdateStatus(configId, status, progress += 50 / configuration.Openings.Count);
+                storedElements.TryGetValue(opening.ElementId, out var filePath);
+                PlaceOpening(newDoc, wall, opening, filePath);
+                UpdateStatus(configId, status, progress += 25 / configuration.Openings.Count);
             }
 
-            // TODO: UpdateStatus(configId, status, "Placing materials", 60);
-            
+            UpdateStatus(configId, status, "Placing materials", progress); // == 60
+            foreach (var plane in configuration.Planes)
+            {
+                storedMaterials.TryGetValue(plane.MaterialId, out var textureFiles);
+                PlacePlane(newDoc, wall, plane, textureFiles);
+                UpdateStatus(configId, status, progress += 25 / configuration.Planes.Count);
+            }
+
             UpdateStatus(configId, status, "Saving Revit file", 85);
             SaveRevitFile(newDoc, configuration, exportSettings.ExportDirectory);
         }
@@ -113,11 +122,11 @@ public class FacadeConfiguratorService
             UpdateStatus(configId, status, "Uploading files", 95);
             _fileUploader.Upload(configId, exportSettings);
         }
-        
+
         UpdateStatus(configId, status, "Configuration complete", 100, true);
     }
 
-    private Dictionary<string, string> FetchElementModels(List<OpeningDto> openings)
+    private Dictionary<string, string> FetchElementModels(IEnumerable<OpeningDto> openings)
     {
         var elements =
             _httpService.PostForObject<List<ElementDto>, IEnumerable<string>>("/elements/find",
@@ -157,45 +166,48 @@ public class FacadeConfiguratorService
         return storedElements;
     }
 
-    private Dictionary<string, string> FetchMaterialModels(List<PlaneDto> planes)
+    private Dictionary<string, (TextureType, string)> FetchMaterialModels(IEnumerable<PlaneDto> planes)
     {
-        // TODO: dto wordt anders
         var materials =
             _httpService.PostForObject<List<MaterialDto>, IEnumerable<string>>("/materials/find",
                 planes.Select(o => o.MaterialId));
 
-        var storedMaterials = new Dictionary<string, string>();
+        var storedMaterials = new Dictionary<string, (TextureType, string)>(); // maybe make this prettier if needed
 
         foreach (var material in materials)
         {
-            if (material.TextureFile == null)
+            foreach (var texture in material.Textures)
             {
-                // _logger.Error($"No files found for material '{material.Name}'. Skipping download..");
-                continue;
+                if (texture.File == null) continue;
+
+                var fileName = $"{material.Name}.{texture.File.Extension}";
+                var fetchPath = $"/blob-storage/download/{texture.File.BlobId}/{fileName}";
+                var destinationPath = Path.Combine(_materialDestinationFolder, fileName);
+
+                if (File.Exists(destinationPath) && (File.GetLastWriteTime(destinationPath) > texture.File.Created))
+                {
+                    storedMaterials[material.Id] = (texture.GetTextureType(), destinationPath);
+                    continue;
+                }
+
+                if (_modelFetcher.Fetch(fetchPath, destinationPath))
+                    storedMaterials[material.Id] = (texture.GetTextureType(), destinationPath);
             }
-
-            var rvtFile = (material.TextureFile.Extension == "rvt") ? material.TextureFile : null;
-
-            if (rvtFile == null)
-            {
-                // _logger.Error($"No rvt file found for material '{material.Name}'. Skipping download..");
-                continue;
-            }
-
-            var fileName = $"{material.Name}.rvt";
-            var fetchPath = $"/blob-storage/download/{rvtFile.BlobId}/{fileName}";
-            var destinationPath = Path.Combine(_modelDestinationFolder, fileName);
-
-            if (File.Exists(destinationPath) && (File.GetLastWriteTime(destinationPath) > rvtFile.Created))
-            {
-                storedMaterials[material.Id] = destinationPath;
-                continue;
-            }
-
-            if (_modelFetcher.Fetch(fetchPath, destinationPath)) storedMaterials[material.Id] = destinationPath;
         }
 
         return storedMaterials;
+    }
+
+    private void PlaceOpening(Document doc, Wall wall, OpeningDto opening, string filePath)
+    {
+        var position = new XYZ(opening.Position.X, opening.Position.Z, opening.Position.Y);
+        _wallPlacer.CreateOpening(doc, wall, position, opening.Width, opening.Height);
+        _modelPlacer.Place(doc, filePath, position, new XYZ(0, 0, 0), 0);
+    }
+
+    private void PlacePlane(Document doc, Wall wall, PlaneDto plane, (TextureType, string) textureFiles)
+    {
+        // TODO
     }
 
     private string SaveRevitFile(Document doc, FacadeConfigurationDto configuration, string exportDirectory)
@@ -262,7 +274,7 @@ public class FacadeConfiguratorService
         status.Progress = progress;
         PostStatus(configId, status);
     }
-    
+
     private void UpdateStatus(string configId, FacadeConfigurationStatus status, string message = null,
         double progress = 0.0, bool finished = false)
     {
