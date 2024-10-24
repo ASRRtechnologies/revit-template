@@ -66,6 +66,7 @@ public class FileUploader(HttpService httpService)
         var ext = new List<string>();
         if (exportSettings.Rvt) ext.Add(".rvt");
         if (exportSettings.Pdf) ext.Add(".pdf");
+        if (exportSettings.Glb) ext.Add(".glb");
 
         var filePaths = Directory
             .EnumerateFiles(directory)
