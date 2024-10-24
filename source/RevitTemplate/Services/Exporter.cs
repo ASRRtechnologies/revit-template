@@ -4,7 +4,7 @@ using RevitTemplate.Settings;
 
 namespace RevitTemplate.Services;
 
-public class Exporter
+public static class Exporter
 {
     public static bool SaveFiles(Document doc, string entityId, string exportFolder, ExportSettings exportSettings)
     {

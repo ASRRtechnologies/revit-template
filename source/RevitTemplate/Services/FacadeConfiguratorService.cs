@@ -18,7 +18,6 @@ public class FacadeConfiguratorService
     private readonly WallPlacer _wallPlacer;
     private readonly ModelPlacer _modelPlacer;
     private readonly FileUploader _fileUploader;
-    private readonly Exporter _exporter;
     private readonly string _modelDestinationFolder;
     private readonly string _materialDestinationFolder;
 
@@ -30,7 +29,6 @@ public class FacadeConfiguratorService
         _wallPlacer = new WallPlacer();
         _modelPlacer = new ModelPlacer();
         _fileUploader = new FileUploader(_httpService);
-        _exporter = new Exporter();
         _modelDestinationFolder =
             modelDestinationFolder ?? throw new ArgumentNullException(nameof(modelDestinationFolder));
         _materialDestinationFolder =
