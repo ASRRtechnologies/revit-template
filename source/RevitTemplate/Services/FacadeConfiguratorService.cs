@@ -120,7 +120,9 @@ public class FacadeConfiguratorService
         if (exportSettings.UploadToDb)
         {
             UpdateStatus(configId, status, "Uploading files", 95);
-            _fileUploader.Upload(configId, exportSettings);
+            var exportFolder = Path.Combine(exportSettings.ExportDirectory, configId);
+            var uploadPath = $"/facade-configurations/{configId}";
+            _fileUploader.Upload(exportFolder, uploadPath, exportSettings, true);
         }
 
         UpdateStatus(configId, status, "Configuration complete", 100, true);

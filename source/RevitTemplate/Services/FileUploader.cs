@@ -9,15 +9,12 @@ namespace RevitTemplate.Services;
 
 public class FileUploader(HttpService httpService)
 {
-    public void Upload(string configId, ExportSettings exportSettings)
+    public void Upload(string exportFolder, string uploadPath, ExportSettings exportSettings, bool appendFileType = false)
     {
-        if (configId == null) throw new ArgumentNullException(nameof(configId));
-        if (exportSettings.ExportDirectory == null)
-            throw new ArgumentNullException(nameof(exportSettings.ExportDirectory));
-        // exportDirectory = C:\asrr\output\RevitTemplate
-        // configDirectory = C:\asrr\output\RevitTemplate\AAABkbdcywLa5lfL
-        var configDirectory = Path.Combine(exportSettings.ExportDirectory, configId);
-        var paths = GetFilePaths(configDirectory, exportSettings);
+        if (exportFolder == null) throw new ArgumentNullException(nameof(exportFolder));
+        if (uploadPath == null) throw new ArgumentNullException(nameof(uploadPath));
+        
+        var paths = GetFilePaths(exportFolder, exportSettings);
 
         if (paths == null)
         {
@@ -31,7 +28,7 @@ public class FileUploader(HttpService httpService)
             var fileName = Path.GetFileName(path);
             // _logger.Info($"Uploading {fileName} to facade configuration '{configId}'");
 
-            UploadFile(path, configId);
+            UploadFile(path, uploadPath, appendFileType);
 
             // TODO: uncomment below when logging is put in place
             // if (UploadFile(path, configId))
@@ -41,10 +38,14 @@ public class FileUploader(HttpService httpService)
         }
     }
 
-    private bool UploadFile(string filePath, string configId)
+    private bool UploadFile(string filePath, string uploadPath, bool appendFileType = false)
     {
-        var fileType = GetFileType(filePath);
-        var uploadPath = $"/facade-configurations/{configId}/{fileType}";
+        if (appendFileType)
+        {
+            var fileType = GetFileType(filePath);
+            uploadPath = $"{uploadPath}/{fileType}";
+        }
+
         var content = GetFileContent(filePath);
 
         var response = httpService.Post(uploadPath, content);
@@ -76,7 +77,7 @@ public class FileUploader(HttpService httpService)
 
     private static MultipartFormDataContent GetFileContent(string filePath)
     {
-        if (!File.Exists(@filePath))
+        if (!File.Exists(filePath))
             throw new FileNotFoundException($"Failed to upload: '{filePath}' does not exist");
         
         var content = new ByteArrayContent(File.ReadAllBytes(filePath));
@@ -91,16 +92,14 @@ public class FileUploader(HttpService httpService)
         var extension = Path.GetExtension(filePath);
         switch (extension)
         {
-            case "glb":
-            case "ifc":
-            case "rvt": return FileType.Model;
-            case "png": return FileType.Image;
-            case "pdf": return FileType.Document;
+            case ".glb":
+            case ".ifc":
+            case ".rvt": return FileType.Model;
+            case ".png": return FileType.Image;
+            case ".pdf": return FileType.Document;
         }
 
         // _logger.Error($"File at filepath {filePath} is not recognized as a valid extension");
         return extension;
     }
 }
-
-// /facade-configurations/{id}/{fileType}
