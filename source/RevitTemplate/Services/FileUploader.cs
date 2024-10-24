@@ -31,7 +31,7 @@ public class FileUploader(HttpService httpService)
             UploadFile(path, uploadPath, appendFileType);
 
             // TODO: uncomment below when logging is put in place
-            // if (UploadFile(path, configId))
+            // if (UploadFile(path, uploadPath, appendFileType))
             //     _logger.Info($"Successfully uploaded {fileName} to facade configuration '{configId}'");
             // else
             //     _logger.Error($"Failed to upload {fileName} to facade configuration '{configId}'");

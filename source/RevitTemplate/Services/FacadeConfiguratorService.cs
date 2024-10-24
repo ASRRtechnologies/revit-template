@@ -3,7 +3,6 @@ using System.Net.Http;
 using System.Text;
 using ASRR.Revit.Core.Http;
 using ASRR.Revit.Core.RevitModel;
-using ASRR.Revit.Core.Utilities;
 using Autodesk.Revit.UI;
 using Newtonsoft.Json;
 using RevitTemplate.Dto;
@@ -19,6 +18,7 @@ public class FacadeConfiguratorService
     private readonly WallPlacer _wallPlacer;
     private readonly ModelPlacer _modelPlacer;
     private readonly FileUploader _fileUploader;
+    private readonly Exporter _exporter;
     private readonly string _modelDestinationFolder;
     private readonly string _materialDestinationFolder;
 
@@ -30,6 +30,7 @@ public class FacadeConfiguratorService
         _wallPlacer = new WallPlacer();
         _modelPlacer = new ModelPlacer();
         _fileUploader = new FileUploader(_httpService);
+        _exporter = new Exporter();
         _modelDestinationFolder =
             modelDestinationFolder ?? throw new ArgumentNullException(nameof(modelDestinationFolder));
         _materialDestinationFolder =
@@ -79,6 +80,7 @@ public class FacadeConfiguratorService
         FacadeConfigurationStatus status)
     {
         var configId = configuration.Id;
+        var exportFolder = Path.Combine(exportSettings.ExportDirectory, "facade-configurations", configId);
         var progress = 10;
         UpdateStatus(configId, status, "Fetching models", progress);
         var storedElements = FetchElementModels(configuration.Openings);
@@ -114,13 +116,12 @@ public class FacadeConfiguratorService
             }
 
             UpdateStatus(configId, status, "Saving Revit file", 85);
-            SaveRevitFile(newDoc, configuration, exportSettings.ExportDirectory);
+            Exporter.SaveFiles(newDoc, configId, exportFolder, exportSettings);
         }
 
         if (exportSettings.UploadToDb)
         {
             UpdateStatus(configId, status, "Uploading files", 95);
-            var exportFolder = Path.Combine(exportSettings.ExportDirectory, configId);
             var uploadPath = $"/facade-configurations/{configId}";
             _fileUploader.Upload(exportFolder, uploadPath, exportSettings, true);
         }
@@ -210,65 +211,6 @@ public class FacadeConfiguratorService
     private void PlacePlane(Document doc, Wall wall, PlaneDto plane, (TextureType, string) textureFiles)
     {
         // TODO
-    }
-
-    private string SaveRevitFile(Document doc, FacadeConfigurationDto configuration, string exportDirectory)
-    {
-        if (exportDirectory == null)
-        {
-            throw new ConfigurationFailedException("Cannot save revit file. No export directory is given.");
-        }
-
-        Directory.CreateDirectory(exportDirectory);
-        var exportFolder = Path.Combine(exportDirectory, configuration.Id);
-
-        if (Directory.Exists(exportFolder))
-            Directory.Delete(exportFolder, true);
-
-        Directory.CreateDirectory(exportFolder);
-
-        var rvtFilePath = Path.Combine(exportFolder, $"{configuration.Id}.rvt");
-        // status.UpdateProgress("Saving .rvt", 70);
-
-        var options = new SaveAsOptions();
-        options.OverwriteExistingFile = true;
-
-        doc.SaveAs(rvtFilePath, options);
-        // _logger.Info($"Saved Revit file at '{rvtFilePath}'");
-
-        // status.UpdateProgress("Exporting views to pdf", 80);
-        SavePdf(doc, exportFolder, configuration);
-
-        // status.UpdateProgress("Exporting ifc", 90);
-        // _ifcExporter.Export(doc, exportFolder, configuration);
-
-        doc.Close();
-        FileUtilities.RemoveBackUpFilesFromDirectory(exportFolder);
-        return exportFolder;
-    }
-
-    private static void SavePdf(Document doc, string exportFolder, FacadeConfigurationDto configuration)
-    {
-        var pdfExportOptions = new PDFExportOptions();
-        pdfExportOptions.FileName = $"{configuration.Name}_{DateTime.Now:yyyy-MM-dd}";
-
-        try
-        {
-            var collector = new FilteredElementCollector(doc).OfClass(typeof(ViewSheet));
-            var viewPlans = collector.Cast<ViewSheet>().Where(view => view.Name.StartsWith("")).ToList();
-
-            doc.Export(
-                exportFolder,
-                viewPlans.Select(v => v.Id).ToList(),
-                pdfExportOptions
-            );
-        }
-        catch (Exception)
-        {
-            doc.Close();
-            FileUtilities.RemoveBackUpFilesFromDirectory(exportFolder);
-            throw;
-        }
     }
 
     private void UpdateStatus(string configId, FacadeConfigurationStatus status, double progress = 0.0)
