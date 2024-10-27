@@ -123,7 +123,7 @@ public class WallService
         }
 
         var wallOrientation = wall.Orientation.Negate();
-        
+
         using var transaction = WarningDiscardFailuresPreprocessor.GetTransaction(doc);
         transaction.Start("Painting wall");
 
@@ -148,7 +148,7 @@ public class WallService
             transaction.RollBack();
             throw;
         }
-        
+
         transaction.Commit();
     }
 }
