@@ -7,6 +7,7 @@ using Autodesk.Revit.UI;
 using Newtonsoft.Json;
 using RevitTemplate.Dto;
 using RevitTemplate.Exceptions;
+using RevitTemplate.Model;
 using RevitTemplate.Settings;
 
 namespace RevitTemplate.Services;
@@ -15,7 +16,8 @@ public class FacadeConfiguratorService
 {
     private readonly HttpService _httpService;
     private readonly ModelFetcher _modelFetcher;
-    private readonly WallPlacer _wallPlacer;
+    private readonly WallService _wallService;
+    private readonly MaterialService _materialService;
     private readonly ModelPlacer _modelPlacer;
     private readonly FileUploader _fileUploader;
     private readonly string _modelDestinationFolder;
@@ -26,7 +28,8 @@ public class FacadeConfiguratorService
     {
         _httpService = httpService ?? new HttpService();
         _modelFetcher = new ModelFetcher(_httpService);
-        _wallPlacer = new WallPlacer();
+        _wallService = new WallService();
+        _materialService = new MaterialService();
         _modelPlacer = new ModelPlacer();
         _fileUploader = new FileUploader(_httpService);
         _modelDestinationFolder =
@@ -84,7 +87,7 @@ public class FacadeConfiguratorService
         var storedElements = FetchElementModels(configuration.Openings);
 
         UpdateStatus(configId, status, "Fetching materials", progress += 10); // == 20
-        var storedMaterials = FetchMaterialModels(configuration.Planes);
+        var storedMaterials = FetchMaterialFiles(configuration.Planes);
 
         if (exportSettings.TemplateFilePath == null)
         {
@@ -94,7 +97,7 @@ public class FacadeConfiguratorService
         using (var newDoc = uiApp.Application.NewProjectDocument(exportSettings.TemplateFilePath))
         {
             UpdateStatus(configId, status, "Placing wall", progress += 10); // == 30
-            var wall = _wallPlacer.Place(newDoc, new XYZ(0, 0, 0), configuration.Dimensions.X,
+            var wall = _wallService.Place(newDoc, new XYZ(0, 0, 0), configuration.Dimensions.X,
                 configuration.Dimensions.Y);
 
             UpdateStatus(configId, status, "Placing openings", progress += 5); // == 35
@@ -106,11 +109,14 @@ public class FacadeConfiguratorService
             }
 
             UpdateStatus(configId, status, "Placing materials", progress); // == 60
+            // should probably(?) do this before placing openings in the future
             foreach (var plane in configuration.Planes)
             {
-                storedMaterials.TryGetValue(plane.MaterialId, out var textureFiles);
-                PlacePlane(newDoc, wall, plane, textureFiles);
+                var materialDetails = storedMaterials.FirstOrDefault(m => m.Id == plane.MaterialId);
+                if (materialDetails == null) continue;
+                var painted = PlacePlane(newDoc, wall, plane, materialDetails);
                 UpdateStatus(configId, status, progress += 25 / configuration.Planes.Count);
+                if (painted) break; // temp only painting the wall with 1 material until we figure out how to split wall
             }
 
             UpdateStatus(configId, status, "Saving Revit file", 85);
@@ -167,48 +173,60 @@ public class FacadeConfiguratorService
         return storedElements;
     }
 
-    private Dictionary<string, (TextureType, string)> FetchMaterialModels(IEnumerable<PlaneDto> planes)
+    private List<MaterialDetails> FetchMaterialFiles(IEnumerable<PlaneDto> planes)
     {
         var materials =
             _httpService.PostForObject<List<MaterialDto>, IEnumerable<string>>("/materials/find",
                 planes.Select(o => o.MaterialId));
 
-        var storedMaterials = new Dictionary<string, (TextureType, string)>(); // maybe make this prettier if needed
+        var storedMaterials = new List<MaterialDetails>();
 
         foreach (var material in materials)
         {
+            var materialDetails = new MaterialDetails {Id = material.Id, Name = material.Name};
+
             foreach (var texture in material.Textures)
             {
                 if (texture.File == null) continue;
-
-                var fileName = $"{material.Name}.{texture.File.Extension}";
+                
+                var fileName = $"{material.Name}_{texture.Type.ToLower()}.{texture.File.Extension}";
                 var fetchPath = $"/blob-storage/download/{texture.File.BlobId}/{fileName}";
                 var destinationPath = Path.Combine(_materialDestinationFolder, fileName);
 
                 if (File.Exists(destinationPath) && (File.GetLastWriteTime(destinationPath) > texture.File.Created))
                 {
-                    storedMaterials[material.Id] = (texture.GetTextureType(), destinationPath);
+                    materialDetails.Textures[texture.GetTextureType()] = destinationPath;
                     continue;
                 }
 
                 if (_modelFetcher.Fetch(fetchPath, destinationPath))
-                    storedMaterials[material.Id] = (texture.GetTextureType(), destinationPath);
+                    materialDetails.Textures[texture.GetTextureType()] = destinationPath;
+            }
+
+            if (materialDetails.Textures.Count != 0)
+            {
+                storedMaterials.Add(materialDetails);
             }
         }
 
         return storedMaterials;
     }
 
+
     private void PlaceOpening(Document doc, Wall wall, OpeningDto opening, string filePath)
     {
         var position = new XYZ(opening.Position.X, opening.Position.Z, opening.Position.Y);
-        _wallPlacer.CreateOpening(doc, wall, position, opening.Width, opening.Height);
+        _wallService.CreateOpening(doc, wall, position, opening.Width, opening.Height);
         _modelPlacer.Place(doc, filePath, position, new XYZ(0, 0, 0), 0);
     }
 
-    private void PlacePlane(Document doc, Wall wall, PlaneDto plane, (TextureType, string) textureFiles)
+    private bool PlacePlane(Document doc, Wall wall, PlaneDto plane, MaterialDetails materialDetails)
     {
-        // TODO
+        // TODO: figure out how to split wall face into planes and then paint individual planes (faces)
+        if (materialDetails.Textures.Count == 0) return false;
+        _materialService.CreateMaterial(doc, materialDetails);
+        _wallService.PaintExteriorWallFace(doc, wall, materialDetails.Name);
+        return true; // temp, will prob be void
     }
 
     private void UpdateStatus(string configId, FacadeConfigurationStatus status, double progress = 0.0)

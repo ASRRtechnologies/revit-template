@@ -5,7 +5,7 @@ using RevitTemplate.Exceptions;
 
 namespace RevitTemplate.Services;
 
-public class WallPlacer
+public class WallService
 {
     public Wall Place(Document doc, XYZ position, double width, double height, XYZ rotation = null)
     {
@@ -85,12 +85,12 @@ public class WallPlacer
     {
         using var transaction = WarningDiscardFailuresPreprocessor.GetTransaction(doc);
         transaction.Start("Create opening");
-        
+
         var vectorRotation = new VectorRotation(rotation);
         var startPosition = CoordinateUtilities.ConvertMmToFeet(position);
         var endPosition =
             CoordinateUtilities.ConvertMmToFeet(new XYZ(position.X + width, position.Y, position.Z + height));
-        
+
         try
         {
             var opening = doc.Create.NewOpening(wall, startPosition, endPosition);
@@ -107,5 +107,48 @@ public class WallPlacer
             transaction.Commit();
             throw;
         }
+    }
+
+    public void PaintExteriorWallFace(Document doc, Wall wall, string materialName)
+    {
+        var materials = new FilteredElementCollector(doc)
+            .OfCategory(BuiltInCategory.OST_Materials)
+            .OfClass(typeof(Material));
+
+        var material = materials.FirstOrDefault(m => m.Name == materialName);
+        if (material == null)
+        {
+            throw new ConfigurationFailedException(
+                $"Could not paint wall. No material with name '{materialName}' found in document");
+        }
+
+        var wallOrientation = wall.Orientation.Negate();
+        
+        using var transaction = WarningDiscardFailuresPreprocessor.GetTransaction(doc);
+        transaction.Start("Painting wall");
+
+        try
+        {
+            var geometryElement = wall.get_Geometry(new Options());
+            foreach (var geometryObject in geometryElement)
+            {
+                if (geometryObject is not Solid solid) continue;
+                foreach (Face face in solid.Faces)
+                {
+                    if (face is not PlanarFace planarFace) continue;
+                    if (planarFace.FaceNormal.IsAlmostEqualTo(wallOrientation) && !doc.IsPainted(wall.Id, face))
+                    {
+                        doc.Paint(wall.Id, face, material.Id);
+                    }
+                }
+            }
+        }
+        catch (Exception)
+        {
+            transaction.RollBack();
+            throw;
+        }
+        
+        transaction.Commit();
     }
 }

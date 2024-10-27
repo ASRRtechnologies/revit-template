@@ -39,14 +39,3 @@ public enum TextureType
     RvtPng,
     Unknown
 }
-
-// public class TextureType
-// {
-//     public const string
-//         Color = "COLOR",
-//         Normal = "NORMAL",
-//         Ao = "AO",
-//         Roughness = "ROUGHNESS",
-//         Bump = "BUMP",
-//         RvtPng = "RVT_PNG";
-// }

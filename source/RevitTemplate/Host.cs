@@ -36,7 +36,6 @@ public static class Host
 
         // Add configurator services
         services.AddFacadeConfigurator();
-        services.AddTransient(_ => new WallPlacer());
         services.AddTransient(_ => new FileUploader(GetService<HttpService>()));
 
         _serviceProvider = services.BuildServiceProvider();
