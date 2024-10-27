@@ -1,4 +1,5 @@
-﻿using ASRR.Revit.Core.Model;
+﻿using ASRR.Revit.Core.Elements.Rotation;
+using ASRR.Revit.Core.Model;
 using ASRR.Revit.Core.Utilities;
 using ASRR.Revit.Core.Warnings;
 using RevitTemplate.Exceptions;
@@ -33,7 +34,8 @@ public class WallService
         transaction.Start("Create Wall");
 
         var startPosition = CoordinateUtilities.ConvertMmToFeet(position);
-        var endPosition = CoordinateUtilities.ConvertMmToFeet(new XYZ(position.X + width, position.Y, position.Z));
+        var endVector = new XYZ(position.X + width, position.Y, position.Z);
+        var endPosition = CoordinateUtilities.ConvertMmToFeet(endVector);
         var line = Line.CreateBound(startPosition, endPosition);
 
         try
@@ -48,11 +50,10 @@ public class WallService
                 false,
                 true);
 
-
             var vectorRotation = new VectorRotation(rotation);
             if (vectorRotation.RotationInDegrees != 0.0)
             {
-                RotateWall(created, vectorRotation);
+                RotateWall(doc, created, vectorRotation);
             }
 
             transaction.Commit();
@@ -60,46 +61,51 @@ public class WallService
         }
         catch (Exception)
         {
-            transaction.Commit();
+            transaction.RollBack();
             throw;
         }
     }
 
-    public bool RotateWall(Element element, VectorRotation rotation)
+    public bool RotateWall(Document doc, Element element, VectorRotation rotation)
     {
         var rotated = false;
 
-        if (element.Location is LocationCurve curve)
-        {
-            var line = curve.Curve;
-            var aa = line.GetEndPoint(0);
-            var cc = new XYZ(aa.X, aa.Y, aa.Z + 10);
-            var axis = Line.CreateBound(aa, cc);
-            rotated = curve.Rotate(axis, rotation.RotationInRadians);
-        }
-
-        return rotated;
-    }
-
-    public void CreateOpening(Document doc, Wall wall, XYZ position, double width, double height, XYZ rotation = null)
-    {
         using var transaction = WarningDiscardFailuresPreprocessor.GetTransaction(doc);
         transaction.Start("Create opening");
 
-        var vectorRotation = new VectorRotation(rotation);
+        try
+        {
+            if (element.Location is LocationCurve curve)
+            {
+                var line = curve.Curve;
+                var aa = line.GetEndPoint(0);
+                var cc = new XYZ(aa.X, aa.Y, aa.Z + 10);
+                var axis = Line.CreateBound(aa, cc);
+                rotated = curve.Rotate(axis, rotation.RotationInRadians);
+            }
+        }
+        catch (Exception)
+        {
+            transaction.RollBack();
+            throw;
+        }
+
+        transaction.Commit();
+        return rotated;
+    }
+
+    public void CreateOpening(Document doc, Wall wall, XYZ position, double width, double height)
+    {
+        using var transaction = WarningDiscardFailuresPreprocessor.GetTransaction(doc);
+        transaction.Start("Create opening");
+        
         var startPosition = CoordinateUtilities.ConvertMmToFeet(position);
-        var endPosition =
-            CoordinateUtilities.ConvertMmToFeet(new XYZ(position.X + width, position.Y, position.Z + height));
+        var endVector = new XYZ(position.X + width, position.Y, position.Z + height);
+        var endPosition = CoordinateUtilities.ConvertMmToFeet(endVector);
 
         try
         {
-            var opening = doc.Create.NewOpening(wall, startPosition, endPosition);
-
-            if (vectorRotation.RotationInDegrees != 0.0)
-            {
-                // TODO
-            }
-
+            doc.Create.NewOpening(wall, startPosition, endPosition);
             transaction.Commit();
         }
         catch (Exception)
