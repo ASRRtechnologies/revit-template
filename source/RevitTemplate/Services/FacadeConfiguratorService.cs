@@ -16,22 +16,22 @@ public class FacadeConfiguratorService
 {
     private readonly HttpService _httpService;
     private readonly ModelFetcher _modelFetcher;
+    private readonly FileUploader _fileUploader;
     private readonly WallService _wallService;
     private readonly MaterialService _materialService;
     private readonly ModelPlacer _modelPlacer;
-    private readonly FileUploader _fileUploader;
     private readonly string _modelDestinationFolder;
     private readonly string _materialDestinationFolder;
 
-    public FacadeConfiguratorService(HttpService httpService, string modelDestinationFolder,
+    public FacadeConfiguratorService(HttpService httpService, ModelFetcher modelFetcher, FileUploader fileUploader, string modelDestinationFolder,
         string materialDestinationFolder)
     {
         _httpService = httpService ?? new HttpService();
-        _modelFetcher = new ModelFetcher(_httpService);
+        _modelFetcher = modelFetcher ?? new ModelFetcher(_httpService);
+        _fileUploader = fileUploader ?? new FileUploader(_httpService);
         _wallService = new WallService();
         _materialService = new MaterialService();
         _modelPlacer = new ModelPlacer();
-        _fileUploader = new FileUploader(_httpService);
         _modelDestinationFolder =
             modelDestinationFolder ?? throw new ArgumentNullException(nameof(modelDestinationFolder));
         _materialDestinationFolder =
@@ -44,7 +44,7 @@ public class FacadeConfiguratorService
     {
         if (configId == null)
         {
-            throw new ConfigurationFailedException("Facade configuration failed. ConfigurationId is null");
+            throw new ConfigurationFailedException("Facade configuration failed. Configuration id is null");
         }
 
         var configuration = _httpService.GetForObject<FacadeConfigurationDto>($"/facade-configurations/find/{configId}")

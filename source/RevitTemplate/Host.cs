@@ -1,6 +1,7 @@
 using System.Net.Http;
 using ASRR.Core.Persistence;
 using ASRR.Revit.Core.Http;
+using ASRR.Revit.Core.RevitModel;
 using Microsoft.Extensions.DependencyInjection;
 using RevitTemplate.Config;
 using RevitTemplate.Services;
@@ -35,8 +36,10 @@ public static class Host
         services.AddTransient(_ => new HttpService(_httpClient));
 
         // Add configurator services
-        services.AddFacadeConfigurator();
+        services.AddTransient(_ => new ModelFetcher(GetService<HttpService>()));
         services.AddTransient(_ => new FileUploader(GetService<HttpService>()));
+        services.AddFacadeConfigurator();
+        services.AddProjectConfigurator();
 
         _serviceProvider = services.BuildServiceProvider();
     }
@@ -62,7 +65,18 @@ public static class Host
     {
         services.AddTransient(_ => new FacadeConfiguratorService(
             GetService<HttpService>(),
+            GetService<ModelFetcher>(),
+            GetService<FileUploader>(),
             @"C:\asrr\resources\RevitTemplate\models",
             @"C:\asrr\resources\RevitTemplate\materials"));
+    }
+
+    private static void AddProjectConfigurator(this IServiceCollection services)
+    {
+        services.AddTransient(_ => new ProjectConfiguratorService(
+            GetService<HttpService>(),
+            GetService<ModelFetcher>(),
+            GetService<FileUploader>(),
+            @"C:\asrr\resources\RevitTemplate\facades"));
     }
 }
