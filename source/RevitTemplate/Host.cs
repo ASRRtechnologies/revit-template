@@ -77,6 +77,7 @@ public static class Host
             GetService<HttpService>(),
             GetService<ModelFetcher>(),
             GetService<FileUploader>(),
-            @"C:\asrr\resources\RevitTemplate\facades"));
+            GetService<FacadeConfiguratorService>(),
+            @"C:\asrr\resources\RevitTemplate\dynamic-models"));
     }
 }

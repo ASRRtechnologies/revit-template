@@ -9,6 +9,7 @@ using RevitTemplate.Dto;
 using RevitTemplate.Exceptions;
 using RevitTemplate.Model;
 using RevitTemplate.Settings;
+using RevitTemplate.Utilities;
 
 namespace RevitTemplate.Services;
 
@@ -17,25 +18,25 @@ public class FacadeConfiguratorService
     private readonly HttpService _httpService;
     private readonly ModelFetcher _modelFetcher;
     private readonly FileUploader _fileUploader;
+    private readonly ModelPlacer _modelPlacer;
     private readonly WallService _wallService;
     private readonly MaterialService _materialService;
-    private readonly ModelPlacer _modelPlacer;
     private readonly string _modelDestinationFolder;
     private readonly string _materialDestinationFolder;
 
-    public FacadeConfiguratorService(HttpService httpService, ModelFetcher modelFetcher, FileUploader fileUploader, string modelDestinationFolder,
-        string materialDestinationFolder)
+    public FacadeConfiguratorService(HttpService httpService, ModelFetcher modelFetcher, FileUploader fileUploader,
+        string modelDestinationFolder, string materialDestinationFolder)
     {
         _httpService = httpService ?? new HttpService();
         _modelFetcher = modelFetcher ?? new ModelFetcher(_httpService);
         _fileUploader = fileUploader ?? new FileUploader(_httpService);
+        _modelPlacer = new ModelPlacer();
         _wallService = new WallService();
         _materialService = new MaterialService();
-        _modelPlacer = new ModelPlacer();
-        _modelDestinationFolder =
-            modelDestinationFolder ?? throw new ArgumentNullException(nameof(modelDestinationFolder));
-        _materialDestinationFolder =
-            materialDestinationFolder ?? throw new ArgumentNullException(nameof(materialDestinationFolder));
+        _modelDestinationFolder = modelDestinationFolder
+                                  ?? throw new ArgumentNullException(nameof(modelDestinationFolder));
+        _materialDestinationFolder = materialDestinationFolder
+                                     ?? throw new ArgumentNullException(nameof(materialDestinationFolder));
         Directory.CreateDirectory(_modelDestinationFolder);
         Directory.CreateDirectory(_materialDestinationFolder);
     }
@@ -120,6 +121,7 @@ public class FacadeConfiguratorService
             }
 
             UpdateStatus(configId, status, "Saving Revit file", 85);
+            GroupUtilities.CreateGroup(newDoc, configId);
             Exporter.SaveFiles(newDoc, configId, exportFolder, exportSettings);
         }
 
@@ -188,7 +190,7 @@ public class FacadeConfiguratorService
             foreach (var texture in material.Textures)
             {
                 if (texture.File == null) continue;
-                
+
                 var fileName = $"{material.Name}_{texture.Type.ToLower()}.{texture.File.Extension}";
                 var fetchPath = $"/blob-storage/download/{texture.File.BlobId}/{fileName}";
                 var destinationPath = Path.Combine(_materialDestinationFolder, fileName);

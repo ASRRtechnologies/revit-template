@@ -33,12 +33,14 @@ public class PlaceWallCommand : IExternalCommand
             //     }
             // };
             // materialService.CreateMaterial(doc, material);
-            var wall = wallService.Place(doc, new XYZ(0, 0, 0), 5400, 2650); // voorgevel
-            wallService.CreateOpening(doc, wall, new XYZ(300, 0, 500), 1600, 1505);
-            wallService.RotateWall(doc, wall, new VectorRotation(new XYZ(0, 90, 0)));
-            // wallService.RotateOpening(opening);
-            // var wall = wallService.Place(doc, new XYZ(5400, 12000, 0), 5400, 2650, new XYZ(-180, 0, 0)); // achtergevel
-            // var wall = wallService.Place(doc, new XYZ(5400, 0, 0), 12000, 2650, new XYZ(0, 90, 0)); // wand rechts
+            wallService.Place(doc, new XYZ(0, 0, 0), 5400, 2650); // voorgevel
+            var wall = wallService.Place(doc, new XYZ(5400, 12000, 0), 5400, 2650);
+            wallService.CreateOpening(doc, wall, new XYZ(5700, 0, 500), 1600, 1505);
+            // wallService.RotateWall(doc, wall, new VectorRotation(new XYZ(-90, 0, 0)));
+            wallService.RotateWallDegrees(doc, wall, new DegreeRotation(90));
+            // wallService.CreateOpening(doc, wall, new XYZ(300, 0, 500), 1600, 1505);
+            // wallService.Place(doc, new XYZ(5400, 12000, 0), 5400, 2650, new XYZ(0, 90, 0)); // achtergevel
+            // wallService.Place(doc, new XYZ(5400, 0, 0), 12000, 2650, new XYZ(0, 90, 0)); // wand rechts
             // wallService.PaintExteriorWallFace(doc, wall, "Blackpepper_Brick");
         }
         catch (Exception e)

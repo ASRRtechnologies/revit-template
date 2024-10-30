@@ -50,13 +50,20 @@ public class WallService
                 false,
                 true);
 
-            var vectorRotation = new VectorRotation(rotation);
-            if (vectorRotation.RotationInDegrees != 0.0)
-            {
-                RotateWall(doc, created, vectorRotation);
-            }
-
             transaction.Commit();
+            
+            // var vectorRotation = new VectorRotation(rotation);
+            // if (vectorRotation.RotationInDegrees != 0.0)
+            // {
+            //     RotateWall(doc, created, vectorRotation);
+            // }
+            
+            if (rotation != null && rotation.Y != 0.0)
+            {
+                var degreeRotation = new DegreeRotation(rotation.Y);
+                RotateWallDegrees(doc, created, degreeRotation);
+            }
+            
             return created;
         }
         catch (Exception)
@@ -71,7 +78,36 @@ public class WallService
         var rotated = false;
 
         using var transaction = WarningDiscardFailuresPreprocessor.GetTransaction(doc);
-        transaction.Start("Create opening");
+        transaction.Start("Rotate wall");
+
+        try
+        {
+            if (element.Location is LocationCurve curve)
+            {
+                var line = curve.Curve;
+                var aa = line.GetEndPoint(0);
+                var cc = new XYZ(aa.X, aa.Y, aa.Z + 10);
+                var axis = Line.CreateBound(aa, cc);
+                Console.WriteLine(rotation.RotationInDegrees);
+                rotated = curve.Rotate(axis, rotation.RotationInRadians);
+            }
+        }
+        catch (Exception)
+        {
+            transaction.RollBack();
+            throw;
+        }
+
+        transaction.Commit();
+        return rotated;
+    }
+    
+    public bool RotateWallDegrees(Document doc, Element element, DegreeRotation rotation)
+    {
+        var rotated = false;
+
+        using var transaction = WarningDiscardFailuresPreprocessor.GetTransaction(doc);
+        transaction.Start("Rotate wall");
 
         try
         {

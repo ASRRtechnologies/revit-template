@@ -7,6 +7,8 @@ public class FacadeConfigurationDto
     public VectorDto Dimensions { get; set; }
     public List<OpeningDto> Openings { get; set; }
     public List<PlaneDto> Planes { get; set; }
+    public List<FileData> Files { get; set; }
+    public DateTime ConfigurationLastChanged { get; set; }
 }
 
 public class OpeningDto
@@ -14,7 +16,7 @@ public class OpeningDto
     public string Id { get; set; }
     public string Name { get; set; }
     public string ElementId { get; set; }
-    public Position Position  { get; set; }
+    public Position Position  { get; set; } = new();
     public double Height { get; set; }
     public double Width { get; set; }
 }

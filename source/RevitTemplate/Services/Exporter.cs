@@ -1,7 +1,9 @@
 ﻿using System.IO;
 using ASRR.Revit.Core.Exporter.GLTF.Core;
 using ASRR.Revit.Core.Exporter.GLTF.Model;
+using ASRR.Revit.Core.RevitModel;
 using ASRR.Revit.Core.Utilities;
+using ASRR.Revit.Core.Warnings;
 using RevitTemplate.Settings;
 
 namespace RevitTemplate.Services;
@@ -13,13 +15,13 @@ public static class Exporter
         if (entityId == null) throw new ArgumentNullException(nameof(entityId));
         if (exportFolder == null) throw new ArgumentNullException(nameof(exportFolder));
 
-        if (Directory.Exists(exportFolder)) Directory.Delete(exportFolder, true);
-        Directory.CreateDirectory(exportFolder);
-
         var savedAll = true;
         try
         {
-            if (exportSettings.Rvt) savedAll &= SaveRevitFile(doc, entityId, exportFolder);
+            if (Directory.Exists(exportFolder)) Directory.Delete(exportFolder, true);
+            Directory.CreateDirectory(exportFolder);
+
+            if (exportSettings.Rvt) savedAll &= SaveRevitFile(doc, entityId, exportFolder).Item1;
             if (exportSettings.Pdf) savedAll &= SavePdf(doc, entityId, exportFolder);
             if (exportSettings.Glb) savedAll &= SaveGlb(doc, entityId, exportFolder, exportSettings.GlbExportViewName);
         }
@@ -35,7 +37,31 @@ public static class Exporter
         return savedAll;
     }
 
-    private static bool SaveRevitFile(Document doc, string entityId, string exportFolder)
+    public static string SaveRevitFileAndClose(Document doc, string entityId, string exportFolder,
+        bool overwriteFolder = false)
+    {
+        try
+        {
+            if (overwriteFolder)
+            {
+                if (Directory.Exists(exportFolder)) Directory.Delete(exportFolder, true);
+                Directory.CreateDirectory(exportFolder);
+            }
+
+            var (_, filePath) = SaveRevitFile(doc, entityId, exportFolder);
+            doc.Close();
+            FileUtilities.RemoveBackUpFilesFromDirectory(exportFolder);
+            return filePath;
+        }
+        catch (Exception)
+        {
+            doc.Close();
+            FileUtilities.RemoveBackUpFilesFromDirectory(exportFolder);
+            throw;
+        }
+    }
+
+    private static (bool, string) SaveRevitFile(Document doc, string entityId, string exportFolder)
     {
         var rvtFilePath = Path.Combine(exportFolder, $"{entityId}.rvt");
 
@@ -43,7 +69,7 @@ public static class Exporter
         options.OverwriteExistingFile = true;
 
         doc.SaveAs(rvtFilePath, options);
-        return true;
+        return (true, rvtFilePath);
     }
 
     private static bool SavePdf(Document doc, string entityId, string exportFolder)
@@ -65,14 +91,14 @@ public static class Exporter
             IncludeGeometricObjects = true,
             ShouldStopOnError = false
         };
-                
+
         var view3D = Collector.GetFirstOfType<View3D>(doc);
         var allViews = Collector.GetAllOfType<View3D>(doc);
 
         var glbView = allViews.FirstOrDefault(v => v.Name == viewName) ?? view3D;
         return TryToExport(exporter, glbView);
     }
-    
+
     private static GLTFExportContext CreateExportContext(Document doc, string entityId, string exportFolder)
     {
         var filePath = Path.Combine(exportFolder, entityId);
@@ -81,11 +107,11 @@ public static class Exporter
             path = filePath,
             fileName = entityId
         };
-        
+
         var ctx = new GLTFExportContext(doc, preferences);
         return ctx;
     }
-    
+
     private static bool TryToExport(CustomExporter exporter, View view)
     {
         try
