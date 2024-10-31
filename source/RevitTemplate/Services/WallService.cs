@@ -1,4 +1,5 @@
-﻿using ASRR.Revit.Core.Elements.Rotation;
+﻿using System.IO;
+using ASRR.Revit.Core.Elements.Rotation;
 using ASRR.Revit.Core.Model;
 using ASRR.Revit.Core.Utilities;
 using ASRR.Revit.Core.Warnings;
@@ -17,7 +18,7 @@ public class WallService
 
         if (levels.FirstElement() is not Level firstLevel)
         {
-            throw new ConfigurationFailedException("No level found in document");
+            throw new WallCreationFailedException("No level found in document");
         }
 
         var wallTypes = new FilteredElementCollector(doc)
@@ -27,7 +28,7 @@ public class WallService
 
         if (wallTypes.FirstElement() is not WallType wallType)
         {
-            throw new ConfigurationFailedException("No wall type found in document");
+            throw new WallCreationFailedException("No wall type found in document");
         }
 
         using var transaction = WarningDiscardFailuresPreprocessor.GetTransaction(doc);
@@ -129,7 +130,7 @@ public class WallService
         transaction.Commit();
         return rotated;
     }
-
+    
     public void CreateOpening(Document doc, Wall wall, XYZ position, double width, double height)
     {
         using var transaction = WarningDiscardFailuresPreprocessor.GetTransaction(doc);

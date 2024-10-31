@@ -1,6 +1,7 @@
 ﻿using System.IO;
 using System.Net;
 using ASRR.Revit.Core.Http;
+using ASRR.Revit.Core.Model;
 using ASRR.Revit.Core.RevitModel;
 using ASRR.Revit.Core.Warnings;
 using Autodesk.Revit.UI;
@@ -73,7 +74,7 @@ public class ProjectConfiguratorService
         var queueId = queueItem.Id;
         var exportFolder = Path.Combine(exportSettings.ExportDirectory, "project-configurations", queueId);
         // var progress = 5;
-        var geometry = _httpService.GetForObject<ProjectGeometryDto>($"/queues/job/{queueId}/geometry")
+        var projectGeometry = _httpService.GetForObject<ProjectGeometryDto>($"/queues/job/{queueId}/geometry")
                        ?? throw new ConfigurationFailedException(
                            $"Configuration failed. Failed to fetch geometry for queue item with id '{queueId}' from db");
 
@@ -82,24 +83,50 @@ public class ProjectConfiguratorService
             throw new ConfigurationFailedException("Configuration failed. Template file path not found.");
         }
 
-        foreach (var block in geometry.Blocks)
+        foreach (var block in projectGeometry.Blocks)
         {
-            ConfigureBlock(uiApp, block, exportFolder, exportSettings, status);
+            block.filePath = ConfigureBlock(uiApp, block, exportFolder, exportSettings, status);
         }
+        
+        using var newDoc = uiApp.Application.NewProjectDocument(exportSettings.TemplateFilePath);
+        foreach (var block in projectGeometry.Blocks)
+        {
+            if (block.filePath == null) continue;
+            var blockConfig = block.BlockConfiguration;
+            _modelPlacer.Place(newDoc, block.filePath, blockConfig.Position.ToXyz(), null, 0);
+            
+            GroupUtilities.RotateGroup(newDoc, blockConfig.BlockId, new DegreeRotation(blockConfig.Rotation.Y));
+        }
+        
+        Exporter.SaveRevitFileAndClose(newDoc, projectGeometry.Id, exportFolder);
     }
 
-    private void ConfigureBlock(UIApplication uiApp, BlockGeometry block, string projectExportFolder,
+    private string ConfigureBlock(UIApplication uiApp, BlockGeometry block, string projectExportFolder,
         ExportSettings exportSettings, ProjectConfigurationStatus status)
     {
-        var exportFolder = Path.Combine(projectExportFolder, "block-configurations", block.BlockConfiguration.BlockId);
         var blockConfiguration = block.BlockConfiguration;
+        var exportFolder = Path.Combine(projectExportFolder, "block-configurations", blockConfiguration.BlockId);
         foreach (var house in block.Houses)
         {
-            ConfigureHouse(uiApp, house, exportFolder, exportSettings, status);
+            house.filePath = ConfigureHouse(uiApp, house, exportFolder, exportSettings, status);
         }
+        
+        using var newDoc = uiApp.Application.NewProjectDocument(exportSettings.TemplateFilePath);
+        foreach (var house in block.Houses)
+        {
+            if (house.filePath == null) continue;
+            var houseConfig = house.HouseConfiguration;
+            _modelPlacer.Place(newDoc, house.filePath, houseConfig.Position.ToXyz(), null, 0);
+            
+            var groupName = $"bnr_{houseConfig.Bnr}";
+            GroupUtilities.RotateGroup(newDoc, groupName, new DegreeRotation(houseConfig.Rotation.Y));
+        }
+        
+        GroupUtilities.CreateGroup(newDoc, blockConfiguration.BlockId);
+        return Exporter.SaveRevitFileAndClose(newDoc, blockConfiguration.BlockId, exportFolder);
     }
 
-    private void ConfigureHouse(UIApplication uiApp, HouseGeometry house, string blockExportFolder,
+    private string ConfigureHouse(UIApplication uiApp, HouseGeometry house, string blockExportFolder,
         ExportSettings exportSettings, ProjectConfigurationStatus status)
     {
         var houseConfiguration = house.HouseConfiguration;
@@ -135,22 +162,16 @@ public class ProjectConfiguratorService
             var position = new XYZ(x, y, dynamicModel.Position.Y);
             _modelPlacer.Place(newDoc, dynamicModel.filePath, position, null, 0);
 
-            using var transaction = WarningDiscardFailuresPreprocessor.GetTransaction(newDoc);
-            transaction.Start("Rotate dynamic model");
-            try
-            {
-                transaction.Commit();
-            }
-            catch (Exception)
-            {
-                transaction.RollBack();
-                throw;
-            }
+            var groupName = dynamicModel.FacadeConfiguration != null
+                ? dynamicModel.FacadeConfiguration.Id
+                : dynamicModel.Id;
+            
+            GroupUtilities.RotateGroup(newDoc, groupName, new DegreeRotation(dynamicModel.Rotation.Y));
         }
 
         var name = $"bnr_{houseConfiguration.Bnr}";
-        // GroupUtilities.CreateGroup(newDoc, name);
-        Exporter.SaveRevitFileAndClose(newDoc, name, exportFolder, true);
+        GroupUtilities.CreateGroup(newDoc, name);
+        return Exporter.SaveRevitFileAndClose(newDoc, name, exportFolder, true);
     }
 
     private string GenerateDynamicModel(UIApplication uiApp, DynamicModelGeometry dynamicModel,
