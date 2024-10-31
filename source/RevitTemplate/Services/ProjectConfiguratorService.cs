@@ -2,6 +2,7 @@
 using System.Net;
 using ASRR.Revit.Core.Http;
 using ASRR.Revit.Core.RevitModel;
+using ASRR.Revit.Core.Warnings;
 using Autodesk.Revit.UI;
 using RevitTemplate.Dto;
 using RevitTemplate.Exceptions;
@@ -112,13 +113,43 @@ public class ProjectConfiguratorService
         foreach (var dynamicModel in house.DynamicModels)
         {
             if (dynamicModel.filePath == null) continue;
-            var x = dynamicModel.Position.X + (dynamicModel.Dimensions.X / 2);
-            var position = new XYZ(x, -dynamicModel.Position.Z, dynamicModel.Position.Y);
+
+            var x = dynamicModel.Rotation.Y switch
+            {
+                0 => dynamicModel.Position.X + (dynamicModel.Dimensions.X / 2),
+                180 => dynamicModel.Position.X - (dynamicModel.Dimensions.X / 2),
+                90 => dynamicModel.Position.X + (dynamicModel.Dimensions.Z / 2),
+                -90 => dynamicModel.Position.X - (dynamicModel.Dimensions.Z / 2),
+                _ => dynamicModel.Position.X
+            };
+
+            var y = dynamicModel.Rotation.Y switch
+            {
+                0 => (-dynamicModel.Position.Z) + (dynamicModel.Dimensions.Z / 2),
+                180 => (-dynamicModel.Position.Z) - (dynamicModel.Dimensions.Z / 2),
+                90 => (-dynamicModel.Position.Z) + (dynamicModel.Dimensions.X / 2),
+                -90 => (-dynamicModel.Position.Z) - (dynamicModel.Dimensions.X / 2),
+                _ => -dynamicModel.Position.Z
+            };
+            
+            var position = new XYZ(x, y, dynamicModel.Position.Y);
             _modelPlacer.Place(newDoc, dynamicModel.filePath, position, null, 0);
+
+            using var transaction = WarningDiscardFailuresPreprocessor.GetTransaction(newDoc);
+            transaction.Start("Rotate dynamic model");
+            try
+            {
+                transaction.Commit();
+            }
+            catch (Exception)
+            {
+                transaction.RollBack();
+                throw;
+            }
         }
 
         var name = $"bnr_{houseConfiguration.Bnr}";
-        GroupUtilities.CreateGroup(newDoc, name);
+        // GroupUtilities.CreateGroup(newDoc, name);
         Exporter.SaveRevitFileAndClose(newDoc, name, exportFolder, true);
     }
 
