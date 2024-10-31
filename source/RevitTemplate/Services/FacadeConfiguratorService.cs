@@ -20,7 +20,6 @@ public class FacadeConfiguratorService
     private readonly FileUploader _fileUploader;
     private readonly ModelPlacer _modelPlacer;
     private readonly WallService _wallService;
-    private readonly MaterialService _materialService;
     private readonly string _modelDestinationFolder;
     private readonly string _materialDestinationFolder;
 
@@ -32,7 +31,6 @@ public class FacadeConfiguratorService
         _fileUploader = fileUploader ?? new FileUploader(_httpService);
         _modelPlacer = new ModelPlacer();
         _wallService = new WallService();
-        _materialService = new MaterialService();
         _modelDestinationFolder = modelDestinationFolder
                                   ?? throw new ArgumentNullException(nameof(modelDestinationFolder));
         _materialDestinationFolder = materialDestinationFolder
@@ -50,7 +48,7 @@ public class FacadeConfiguratorService
 
         var configuration = _httpService.GetForObject<FacadeConfigurationDto>($"/facade-configurations/find/{configId}")
                             ?? throw new ConfigurationFailedException(
-                                $"Facade configuration failed. Failed to fetch configuration with id '{configId}' from db");
+                                $"Failed to fetch configuration with id '{configId}' from db");
 
         var startResponse = _httpService.Post($"/facade-configurations/generation/start/{configId}", null);
         if (!startResponse.IsSuccessStatusCode)
@@ -92,7 +90,7 @@ public class FacadeConfiguratorService
 
         if (exportSettings.TemplateFilePath == null)
         {
-            throw new ConfigurationFailedException("Facade configuration failed. Template file path not found.");
+            throw new ConfigurationFailedException("Facade configuration failed. Template file not found.");
         }
 
         using (var newDoc = uiApp.Application.NewProjectDocument(exportSettings.TemplateFilePath))
@@ -120,7 +118,7 @@ public class FacadeConfiguratorService
                 if (painted) break; // temp only painting the wall with 1 material until we figure out how to split wall
             }
 
-            UpdateStatus(configId, status, "Saving Revit file", 85);
+            UpdateStatus(configId, status, "Saving files", 85);
             GroupUtilities.CreateGroup(newDoc, configId);
             Exporter.SaveFiles(newDoc, configId, exportFolder, exportSettings);
         }
@@ -226,7 +224,7 @@ public class FacadeConfiguratorService
     {
         // TODO: figure out how to split wall face into planes and then paint individual planes (faces)
         if (materialDetails.Textures.Count == 0) return false;
-        _materialService.CreateMaterial(doc, materialDetails);
+        MaterialService.CreateMaterial(doc, materialDetails);
         _wallService.PaintExteriorWallFace(doc, wall, materialDetails.Name);
         return true; // temp, will prob be void
     }

@@ -34,6 +34,30 @@ public static class GroupUtilities
         }
     }
     
+    public static void CreateGroup(Document doc, List<ElementId> elementIds, string groupName)
+    {
+        var elements = ModelElementCollector.GetParentModelElements(doc).ToList();
+        var ids = elements.Where(e => elementIds.Contains(e.Id)).Select(e => e.Id).ToList();
+        
+        using var transaction = WarningDiscardFailuresPreprocessor.GetTransaction(doc);
+        transaction.Start("Create Group");
+        try
+        {
+            if (ids.Count > 0)
+            {
+                var group = doc.Create.NewGroup(ids);
+                group.GroupType.Name = groupName;
+            }
+
+            transaction.Commit();
+        }
+        catch (Exception)
+        {
+            transaction.RollBack();
+            throw;
+        }
+    }
+    
     public static void RotateGroup(Document doc, string groupName, IRotation rotation)
     {
         var groups = new FilteredElementCollector(doc)
@@ -43,7 +67,12 @@ public static class GroupUtilities
             .Cast<Group>()
             .ToList();
 
-        var group = groups.FirstOrDefault(g => g.Name == groupName);
+        var matchingGroups = groups.Where(g => g.Name == groupName).ToList();
+        if (matchingGroups.Count() > 1)
+        {
+            throw new TransformationFailedException($"More than 1 group with name $'{groupName}' found");
+        }
+        var group = matchingGroups.FirstOrDefault();
 
         if (group == null)
         {

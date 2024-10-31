@@ -3,7 +3,6 @@ using System.Net;
 using ASRR.Revit.Core.Http;
 using ASRR.Revit.Core.Model;
 using ASRR.Revit.Core.RevitModel;
-using ASRR.Revit.Core.Warnings;
 using Autodesk.Revit.UI;
 using RevitTemplate.Dto;
 using RevitTemplate.Exceptions;
@@ -41,13 +40,12 @@ public class ProjectConfiguratorService
     {
         if (queueItemId == null)
         {
-            throw new ConfigurationFailedException("Project configuration failed. Queue item id is null");
+            throw new ConfigurationFailedException("Configuration failed. Queue item id is null");
         }
 
-        // TODO: replace this get with start job when status flow is in place .. or do it after this call so u can check if exists like in facade?
         var queueItem = _httpService.GetForObject<QueueItemDto>($"/queues/find/{queueItemId}")
                         ?? throw new ConfigurationFailedException(
-                            $"Configuration failed. Failed to fetch queue item with id '{queueItemId}' from db");
+                            $"Failed to fetch queue item with id '{queueItemId}' from db");
 
         var status = new ProjectConfigurationStatus()
         {
@@ -55,15 +53,29 @@ public class ProjectConfiguratorService
             Message = "Starting configuration"
         };
 
-        // todo: start job w/ status
+        var started =
+            _httpService.PostForObject<QueueItemDto, ProjectConfigurationStatus>($"/queues/job/{queueItemId}", status);
+
+        if (started == null)
+        {
+            throw new ConfigurationFailedException(
+                $"Failed to start job for queue item '{queueItemId}'. Make sure job is not locked");
+        }
 
         try
         {
             Configure(uiApp, queueItem, exportSettings, status);
         }
-        catch (Exception)
+        catch (Exception e)
         {
-            // TODO: Update status w/ exception and post
+            var exception = new ConfigurationExceptionDto
+            {
+                Message = e.Message,
+                StackTrace = e.StackTrace,
+                Type = e.GetType().Name
+            };
+            status.Exception = exception;
+            PostStatus(queueItemId, status);
             throw;
         }
     }
@@ -73,100 +85,153 @@ public class ProjectConfiguratorService
     {
         var queueId = queueItem.Id;
         var exportFolder = Path.Combine(exportSettings.ExportDirectory, "project-configurations", queueId);
-        // var progress = 5;
+        var progress = 5;
+        UpdateStatus(queueId, status, "Fetching project geometry", progress);
         var projectGeometry = _httpService.GetForObject<ProjectGeometryDto>($"/queues/job/{queueId}/geometry")
-                       ?? throw new ConfigurationFailedException(
-                           $"Configuration failed. Failed to fetch geometry for queue item with id '{queueId}' from db");
+                              ?? throw new ConfigurationFailedException(
+                                  $"Failed to fetch project geometry for queue item '{queueId}'");
 
         if (exportSettings.TemplateFilePath == null)
         {
-            throw new ConfigurationFailedException("Configuration failed. Template file path not found.");
+            throw new ConfigurationFailedException("Configuration failed. Template file not found.");
         }
 
+        progress = 10;
+        var totalBlocks = projectGeometry.Blocks.Count;
+        var progressPerBlock = 65 / totalBlocks;
+        var i = 1;
         foreach (var block in projectGeometry.Blocks)
         {
-            block.filePath = ConfigureBlock(uiApp, block, exportFolder, exportSettings, status);
+            UpdateStatus(queueId, status, $"Generating block {i}/{totalBlocks}", progress);
+            block.filePath = ConfigureBlock(uiApp, block, exportFolder, exportSettings, status, queueId,
+                progressPerBlock);
+            progress += progressPerBlock;
+            i++;
         }
-        
+
+        progress = 75;
+        var j = 1;
         using var newDoc = uiApp.Application.NewProjectDocument(exportSettings.TemplateFilePath);
         foreach (var block in projectGeometry.Blocks)
         {
-            if (block.filePath == null) continue;
-            var blockConfig = block.BlockConfiguration;
-            _modelPlacer.Place(newDoc, block.filePath, blockConfig.Position.ToXyz(), null, 0);
-            
-            GroupUtilities.RotateGroup(newDoc, blockConfig.BlockId, new DegreeRotation(blockConfig.Rotation.Y));
+            UpdateStatus(queueId, status, $"Placing block {j}/{totalBlocks}", progress);
+            if (block.filePath != null)
+            {
+                var blockConfig = block.BlockConfiguration;
+                _modelPlacer.Place(newDoc, block.filePath, blockConfig.Position.ToXyz(), null, 0);
+
+                GroupUtilities.RotateGroup(newDoc, blockConfig.BlockId, new DegreeRotation(blockConfig.Rotation.Y));
+            }
+
+            progress += 10 / totalBlocks;
+            j++;
         }
-        
-        Exporter.SaveRevitFileAndClose(newDoc, projectGeometry.Id, exportFolder);
+
+        UpdateStatus(queueId, status, "Saving files", 85);
+        Exporter.SaveFiles(newDoc, projectGeometry.Id, exportFolder, exportSettings);
+
+        if (exportSettings.UploadToDb)
+        {
+            UpdateStatus(queueId, status, "Uploading files", 95);
+            var uploadPath = $"/queues/job/{queueId}/upload";
+            _fileUploader.Upload(exportFolder, uploadPath, exportSettings);
+        }
+
+        UpdateStatus(queueId, status, "Configuration complete", 100, true);
     }
 
     private string ConfigureBlock(UIApplication uiApp, BlockGeometry block, string projectExportFolder,
-        ExportSettings exportSettings, ProjectConfigurationStatus status)
+        ExportSettings exportSettings, ProjectConfigurationStatus status, string queueId, double allottedProgress)
     {
         var blockConfiguration = block.BlockConfiguration;
         var exportFolder = Path.Combine(projectExportFolder, "block-configurations", blockConfiguration.BlockId);
+
+        var progress = status.Progress;
+        var totalHouses = block.Houses.Count;
+        var progressPerHouse = allottedProgress / totalHouses / 2;
+        
+        var i = 1;
         foreach (var house in block.Houses)
         {
-            house.filePath = ConfigureHouse(uiApp, house, exportFolder, exportSettings, status);
+            UpdateStatus(queueId, status, $"Generating house {i}/{totalHouses} of block {blockConfiguration.BlockId}",
+                progress);
+            house.filePath = ConfigureHouse(uiApp, house, exportFolder, exportSettings, status, queueId,
+                progressPerHouse);
+            progress += progressPerHouse;
+            i++;
         }
-        
+
         using var newDoc = uiApp.Application.NewProjectDocument(exportSettings.TemplateFilePath);
         foreach (var house in block.Houses)
         {
-            if (house.filePath == null) continue;
-            var houseConfig = house.HouseConfiguration;
-            _modelPlacer.Place(newDoc, house.filePath, houseConfig.Position.ToXyz(), null, 0);
-            
-            var groupName = $"bnr_{houseConfig.Bnr}";
-            GroupUtilities.RotateGroup(newDoc, groupName, new DegreeRotation(houseConfig.Rotation.Y));
+            if (house.filePath != null)
+            {
+                var houseConfig = house.HouseConfiguration;
+                _modelPlacer.Place(newDoc, house.filePath, houseConfig.Position.ToXyz(), null, 0);
+
+                var groupName = $"bnr_{houseConfig.Bnr}";
+                GroupUtilities.RotateGroup(newDoc, groupName, new DegreeRotation(houseConfig.Rotation.Y));
+            }
+
+            UpdateStatus(queueId, status, progress += progressPerHouse);
         }
-        
+
         GroupUtilities.CreateGroup(newDoc, blockConfiguration.BlockId);
         return Exporter.SaveRevitFileAndClose(newDoc, blockConfiguration.BlockId, exportFolder);
     }
 
     private string ConfigureHouse(UIApplication uiApp, HouseGeometry house, string blockExportFolder,
-        ExportSettings exportSettings, ProjectConfigurationStatus status)
+        ExportSettings exportSettings, ProjectConfigurationStatus status, string queueId, double allottedProgress)
     {
         var houseConfiguration = house.HouseConfiguration;
         var exportFolder = Path.Combine(blockExportFolder, "house-configurations", houseConfiguration.Bnr);
+
+        var progress = status.Progress;
+        var totalDynamicModels = house.DynamicModels.Count;
+        var progressPerDynamicModel = allottedProgress / totalDynamicModels / 2;
+        
+        var i = 1;
         foreach (var dynamicModel in house.DynamicModels)
         {
-            dynamicModel.filePath = GenerateDynamicModel(uiApp, dynamicModel, exportSettings, status);
+            dynamicModel.filePath = GenerateDynamicModel(uiApp, dynamicModel, exportSettings);
+            UpdateStatus(queueId, status, progress += progressPerDynamicModel);
+            i++;
         }
 
         using var newDoc = uiApp.Application.NewProjectDocument(exportSettings.TemplateFilePath);
         foreach (var dynamicModel in house.DynamicModels)
         {
-            if (dynamicModel.filePath == null) continue;
-
-            var x = dynamicModel.Rotation.Y switch
+            if (dynamicModel.filePath != null)
             {
-                0 => dynamicModel.Position.X + (dynamicModel.Dimensions.X / 2),
-                180 => dynamicModel.Position.X - (dynamicModel.Dimensions.X / 2),
-                90 => dynamicModel.Position.X + (dynamicModel.Dimensions.Z / 2),
-                -90 => dynamicModel.Position.X - (dynamicModel.Dimensions.Z / 2),
-                _ => dynamicModel.Position.X
-            };
+                var x = dynamicModel.Rotation.Y switch
+                {
+                    0 => dynamicModel.Position.X + (dynamicModel.Dimensions.X / 2),
+                    180 => dynamicModel.Position.X - (dynamicModel.Dimensions.X / 2),
+                    90 => dynamicModel.Position.X + (dynamicModel.Dimensions.Z / 2),
+                    -90 => dynamicModel.Position.X - (dynamicModel.Dimensions.Z / 2),
+                    _ => dynamicModel.Position.X
+                };
 
-            var y = dynamicModel.Rotation.Y switch
-            {
-                0 => (-dynamicModel.Position.Z) + (dynamicModel.Dimensions.Z / 2),
-                180 => (-dynamicModel.Position.Z) - (dynamicModel.Dimensions.Z / 2),
-                90 => (-dynamicModel.Position.Z) + (dynamicModel.Dimensions.X / 2),
-                -90 => (-dynamicModel.Position.Z) - (dynamicModel.Dimensions.X / 2),
-                _ => -dynamicModel.Position.Z
-            };
-            
-            var position = new XYZ(x, y, dynamicModel.Position.Y);
-            _modelPlacer.Place(newDoc, dynamicModel.filePath, position, null, 0);
+                var y = dynamicModel.Rotation.Y switch
+                {
+                    0 => (-dynamicModel.Position.Z) + (dynamicModel.Dimensions.Z / 2),
+                    180 => (-dynamicModel.Position.Z) - (dynamicModel.Dimensions.Z / 2),
+                    90 => (-dynamicModel.Position.Z) + (dynamicModel.Dimensions.X / 2),
+                    -90 => (-dynamicModel.Position.Z) - (dynamicModel.Dimensions.X / 2),
+                    _ => -dynamicModel.Position.Z
+                };
 
-            var groupName = dynamicModel.FacadeConfiguration != null
-                ? dynamicModel.FacadeConfiguration.Id
-                : dynamicModel.Id;
-            
-            GroupUtilities.RotateGroup(newDoc, groupName, new DegreeRotation(dynamicModel.Rotation.Y));
+                var position = new XYZ(x, y, dynamicModel.Position.Y);
+                _modelPlacer.Place(newDoc, dynamicModel.filePath, position, null, 0);
+
+                var groupName = dynamicModel.FacadeConfiguration != null
+                    ? dynamicModel.FacadeConfiguration.Id
+                    : dynamicModel.Id;
+
+                GroupUtilities.RotateGroup(newDoc, groupName, new DegreeRotation(dynamicModel.Rotation.Y));
+            }
+
+            UpdateStatus(queueId, status, progress += progressPerDynamicModel);
         }
 
         var name = $"bnr_{houseConfiguration.Bnr}";
@@ -175,7 +240,7 @@ public class ProjectConfiguratorService
     }
 
     private string GenerateDynamicModel(UIApplication uiApp, DynamicModelGeometry dynamicModel,
-        ExportSettings exportSettings, ProjectConfigurationStatus status)
+        ExportSettings exportSettings)
     {
         var facadeConfiguration = dynamicModel.FacadeConfiguration;
 
@@ -217,5 +282,26 @@ public class ProjectConfiguratorService
         var fetchPath = $"/blob-storage/download/{rvtFile.BlobId}/{fileName}";
         if (File.Exists(destinationPath) || _modelFetcher.Fetch(fetchPath, destinationPath)) return destinationPath;
         return null;
+    }
+
+    private void UpdateStatus(string queueItemId, ProjectConfigurationStatus status, double progress = 0.0)
+    {
+        status.Progress = progress;
+        PostStatus(queueItemId, status);
+    }
+
+    private void UpdateStatus(string queueItemId, ProjectConfigurationStatus status, string message = null,
+        double progress = 0.0, bool finished = false)
+    {
+        status.Message = message;
+        status.Progress = progress;
+        status.Finished = finished;
+        PostStatus(queueItemId, status);
+    }
+
+    private void PostStatus(string queueItemId, ProjectConfigurationStatus status)
+    {
+        _httpService.PostForObject<QueueItemDto, ProjectConfigurationStatus>($"/queues/job/status/{queueItemId}",
+            status);
     }
 }

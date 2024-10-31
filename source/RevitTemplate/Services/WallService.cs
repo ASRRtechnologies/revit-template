@@ -1,6 +1,7 @@
 ﻿using System.IO;
-using ASRR.Revit.Core.Elements.Rotation;
+using ASRR.Revit.Core;
 using ASRR.Revit.Core.Model;
+using ASRR.Revit.Core.RevitModel;
 using ASRR.Revit.Core.Utilities;
 using ASRR.Revit.Core.Warnings;
 using RevitTemplate.Exceptions;
@@ -52,19 +53,19 @@ public class WallService
                 true);
 
             transaction.Commit();
-            
+
             // var vectorRotation = new VectorRotation(rotation);
             // if (vectorRotation.RotationInDegrees != 0.0)
             // {
             //     RotateWall(doc, created, vectorRotation);
             // }
-            
+
             if (rotation != null && rotation.Y != 0.0)
             {
                 var degreeRotation = new DegreeRotation(rotation.Y);
                 RotateWallDegrees(doc, created, degreeRotation);
             }
-            
+
             return created;
         }
         catch (Exception)
@@ -102,7 +103,7 @@ public class WallService
         transaction.Commit();
         return rotated;
     }
-    
+
     public bool RotateWallDegrees(Document doc, Element element, DegreeRotation rotation)
     {
         var rotated = false;
@@ -130,12 +131,54 @@ public class WallService
         transaction.Commit();
         return rotated;
     }
-    
+
+    public bool RotateElementDegrees(Document doc, ElementId elementId, DegreeRotation rotation)
+    {
+        var rotated = false;
+
+        var elements = new FilteredElementCollector(doc)
+            .WhereElementIsNotElementType().ToList();
+
+        var element = elements.FirstOrDefault(e => e.Id == elementId);
+
+        if (element == null)
+        {
+            return false;
+        }
+
+        using var transaction = WarningDiscardFailuresPreprocessor.GetTransaction(doc);
+        transaction.Start("Rotate element");
+
+        try
+        {
+            if (element.Location is LocationCurve curve)
+            {
+                var line = curve.Curve;
+                var aa = line.GetEndPoint(0);
+                var cc = new XYZ(aa.X, aa.Y, aa.Z + 10);
+                var axis = Line.CreateBound(aa, cc);
+                rotated = curve.Rotate(axis, rotation.RotationInRadians);
+            }
+            else if (element.Location is LocationPoint)
+            {
+                TransformUtilities.Rotate(element, rotation);
+            }
+        }
+        catch (Exception)
+        {
+            transaction.RollBack();
+            throw;
+        }
+
+        transaction.Commit();
+        return rotated;
+    }
+
     public void CreateOpening(Document doc, Wall wall, XYZ position, double width, double height)
     {
         using var transaction = WarningDiscardFailuresPreprocessor.GetTransaction(doc);
         transaction.Start("Create opening");
-        
+
         var startPosition = CoordinateUtilities.ConvertMmToFeet(position);
         var endVector = new XYZ(position.X + width, position.Y, position.Z + height);
         var endPosition = CoordinateUtilities.ConvertMmToFeet(endVector);
@@ -193,5 +236,51 @@ public class WallService
         }
 
         transaction.Commit();
+    }
+
+    public static ElementId CopyPasteWall(Document doc, string sourcePath, ElementId wallId)
+    {
+        if (!File.Exists(sourcePath))
+        {
+            throw new WallCreationFailedException($"No file found at '{sourcePath}'");
+        }
+
+        using var sourceDoc = doc.Application.OpenDocumentFile(sourcePath);
+        var copyPasteOptions = DocumentUtilities.CopyPasteOptions();
+
+        using var transaction = WarningDiscardFailuresPreprocessor.GetTransaction(doc);
+        transaction.Start("Copy-pasting wall");
+
+        var copied = ElementTransformUtils.CopyElements(sourceDoc, new List<ElementId> {wallId},
+            doc, null, copyPasteOptions);
+
+        transaction.Commit();
+        sourceDoc.Close();
+
+        return copied.FirstOrDefault();
+    }
+
+    public List<ElementId> CopyPasteElements(Document doc, string sourcePath)
+    {
+        if (!File.Exists(sourcePath))
+        {
+            throw new WallCreationFailedException($"No file found at '{sourcePath}'");
+        }
+
+        using var sourceDoc = doc.Application.OpenDocumentFile(sourcePath);
+        var copyPasteOptions = DocumentUtilities.CopyPasteOptions();
+
+        using var transaction = WarningDiscardFailuresPreprocessor.GetTransaction(doc);
+        transaction.Start("Copy-pasting elements");
+
+        var elements = ModelElementCollector.GetParentModelElements(sourceDoc).ToList();
+        var elementIds = elements.Select(e => e.Id).ToList();
+        var copied = ElementTransformUtils.CopyElements(sourceDoc, elementIds, doc, 
+            null, copyPasteOptions);
+
+        transaction.Commit();
+        sourceDoc.Close();
+
+        return copied.ToList();
     }
 }
