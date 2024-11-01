@@ -6,26 +6,26 @@ namespace RevitTemplate.UI
     /// <summary>
     /// Interaction logic for ManualConfigurationInput.xaml
     /// </summary>
-    public partial class ManualFacadeConfigurationInput : Window
+    public partial class ManualConfigurationInput : Window
     {
-        public string FacadeConfigurationId { get; set; }
+        public string Id { get; set; }
 
-        public ManualFacadeConfigurationInput()
+        public ManualConfigurationInput()
         {
             InitializeComponent();
         }
 
         private void RunButton_Click(object sender, RoutedEventArgs e)
         {
-            FacadeConfigurationId = ConfigurationId.Text;
-            if (string.IsNullOrWhiteSpace(FacadeConfigurationId))
+            Id = IdInputBox.Text;
+            if (string.IsNullOrWhiteSpace(Id))
             {
                 var taskDialog = new TaskDialog("Error")
                 {
-                    MainInstruction = "Please input a facadeConfigurationId"
+                    MainInstruction = "Please input an id"
                 };
                 var result = taskDialog.Show();
-                if (result == TaskDialogResult.Cancel || result == TaskDialogResult.Close) Activate();
+                if (result is TaskDialogResult.Cancel or TaskDialogResult.Close) Activate();
                 return;
             }
 

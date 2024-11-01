@@ -11,17 +11,17 @@ namespace RevitTemplate.Commands;
 
 [UsedImplicitly]
 [Transaction(TransactionMode.Manual)]
-public class ConfigureFacadeCommand : IExternalCommand
+public class ConfigureProjectCommand : IExternalCommand
 {
     public Result Execute(ExternalCommandData commandData, ref string message, ElementSet elements)
     {
         var uiApp = commandData.Application;
-        var facadeConfigurationService = Host.GetService<FacadeConfiguratorService>();
+        var projectConfiguratorService = Host.GetService<ProjectConfiguratorService>();
         var persistentStorageProvider = Host.GetService<IPersistentStorageProvider>();
         var exportSettings = persistentStorageProvider.Fetch<ExportSettings>();
 
-        var facadeConfigurationInput = new ManualConfigurationInput();
-        var result = facadeConfigurationInput.ShowDialog();
+        var input = new ManualConfigurationInput();
+        var result = input.ShowDialog();
 
         if (result != true)
         {
@@ -30,7 +30,7 @@ public class ConfigureFacadeCommand : IExternalCommand
 
         try
         {
-            facadeConfigurationService.Configure(uiApp, facadeConfigurationInput.Id, exportSettings);
+            projectConfiguratorService.Configure(uiApp, input.Id, exportSettings);
         }
         catch (ConfigurationException e)
         {

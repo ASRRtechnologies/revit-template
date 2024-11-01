@@ -18,12 +18,21 @@ public class Application : ExternalApplication
 
     private void CreateRibbon()
     {
-        var testPanel = Application.CreatePanel("Test", "ASRR");
+        SetupTestPanel();
+        SetupSettingsPanel();
+        SetupCommandsPanel();
+    }
 
+    private void SetupTestPanel()
+    {
+        var testPanel = Application.CreatePanel("Test", "ASRR");
         testPanel.AddPushButton<PopupCommand>("Click Me!")
             .SetImage("/RevitTemplate;component/Resources/Icons/RibbonIcon16.png")
             .SetLargeImage("/RevitTemplate;component/Resources/Icons/RibbonIcon32.png");
+    }
 
+    private void SetupSettingsPanel()
+    {
         var settingsPanel = Application.CreatePanel("Settings", "ASRR");
         var dbSettingsButton = CreatePushButtonData<OpenDatabaseSettingsCommand>(
             "dbSettingsButton",
@@ -39,12 +48,16 @@ public class Application : ExternalApplication
                 "/RevitTemplate;component/Resources/Icons/RibbonIcon16.png"
             );
         settingsPanel.AddStackedItems(dbSettingsButton, exportSettingsButton);
+    }
 
+    private void SetupCommandsPanel()
+    {
         var commandsPanel = Application.CreatePanel("Commands", "ASRR");
         commandsPanel.AddPushButton<PlaceWallCommand>("Place Wall").ToolTip = "Place wall";
         commandsPanel.AddPushButton<ConfigureFacadeCommand>("Configure Facade").ToolTip = "Configure facade by id";
+        commandsPanel.AddPushButton<ConfigureProjectCommand>("Configure Project").ToolTip = "Configure project by queue id";
     }
-
+    
     private static PushButtonData CreatePushButtonData<T>(string name, string text, string toolTip = null,
         string imagePath = null, string largeImagePath = null)
     {

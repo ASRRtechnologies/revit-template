@@ -6,9 +6,9 @@ using RevitTemplate.Model;
 
 namespace RevitTemplate.Services;
 
-public class MaterialService
+public static class MaterialService
 {
-    public void CreateMaterial(Document doc, MaterialDetails materialDetails)
+    public static void CreateMaterial(Document doc, MaterialDetails materialDetails)
     {
         var materials = new FilteredElementCollector(doc)
             .OfCategory(BuiltInCategory.OST_Materials)

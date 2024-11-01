@@ -4,9 +4,7 @@ public class MaterialDto
 {
     public string Id { get; set; }
     public string Name { get; set; }
-    public List<Texture> Textures { get; set; }
-    public double TextureHeight { get; set; }
-    public double TextureWidth { get; set; }
+    public List<Texture> Textures { get; set; } = [];
 }
 
 public class Texture
