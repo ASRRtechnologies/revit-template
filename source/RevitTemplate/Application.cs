@@ -12,8 +12,21 @@ public class Application : ExternalApplication
 {
     public override void OnStartup()
     {
-        Host.Start();
-        CreateRibbon();
+        var arguments = Environment.GetCommandLineArgs();
+        if (arguments.Contains("-workermode"))
+        {
+            // TODO: start worker mode automatically
+        }
+        else
+        {
+            Host.Start();
+            CreateRibbon();
+        }
+    }
+
+    private void CreateAltRibbon()
+    {
+        SetupTestPanel();
     }
 
     private void CreateRibbon()
@@ -38,14 +51,16 @@ public class Application : ExternalApplication
             "dbSettingsButton",
             "Database Settings",
             "Open database settings",
-            "/RevitTemplate;component/Resources/Icons/RibbonIcon16.png"
+            "/RevitTemplate;component/Resources/Icons/DbSettingsIcon16.png",
+            "/RevitTemplate;component/Resources/Icons/DbSettingsIcon32.png"
         );
         var exportSettingsButton =
             CreatePushButtonData<OpenExportSettingsCommand>(
                 "exportSettingsButton",
                 "Export Settings",
                 "Open export settings",
-                "/RevitTemplate;component/Resources/Icons/RibbonIcon16.png"
+                "/RevitTemplate;component/Resources/Icons/ExportSettingsIcon16.png",
+                "/RevitTemplate;component/Resources/Icons/ExportSettingsIcon32.png"
             );
         settingsPanel.AddStackedItems(dbSettingsButton, exportSettingsButton);
     }
@@ -53,11 +68,18 @@ public class Application : ExternalApplication
     private void SetupCommandsPanel()
     {
         var commandsPanel = Application.CreatePanel("Commands", "ASRR");
-        commandsPanel.AddPushButton<PlaceWallCommand>("Place Wall").ToolTip = "Place wall";
-        commandsPanel.AddPushButton<ConfigureFacadeCommand>("Configure Facade").ToolTip = "Configure facade by id";
-        commandsPanel.AddPushButton<ConfigureProjectCommand>("Configure Project").ToolTip = "Configure project by queue id";
+        // commandsPanel.AddPushButton<PlaceWallCommand>("Place Wall").ToolTip = "Place wall";
+        commandsPanel.AddPushButton<ConfigureFacadeCommand>("Configure\r\nFacade")
+            .SetImage("/RevitTemplate;component/Resources/Icons/FacadeIcon16.png")
+            .SetLargeImage("/RevitTemplate;component/Resources/Icons/FacadeIcon32.png")
+            .ToolTip = "Configure facade by id";
+
+        commandsPanel.AddPushButton<ConfigureProjectCommand>("Configure\r\nProject")
+            .SetImage("/RevitTemplate;component/Resources/Icons/ProjectIcon16.png")
+            .SetLargeImage("/RevitTemplate;component/Resources/Icons/ProjectIcon32.png")
+            .ToolTip = "Configure project by queue id";
     }
-    
+
     private static PushButtonData CreatePushButtonData<T>(string name, string text, string toolTip = null,
         string imagePath = null, string largeImagePath = null)
     {

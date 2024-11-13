@@ -54,6 +54,11 @@ public static class Host
         return _serviceProvider.GetRequiredService<T>();
     }
 
+    // public static void LaunchServer()
+    // {
+    //     
+    // }
+
     private static void SetupHttpClient()
     {
         var databaseSettings = PersistentStorageProvider.Fetch<DatabaseSettings>();
