@@ -66,6 +66,8 @@
     <Resource Include="Resources\Icons\FacadeIcon32.png" />
     <Resource Include="Resources\Icons\ProjectIcon16.png" />
     <Resource Include="Resources\Icons\ProjectIcon32.png" />
+    <Resource Include="Resources\Icons\WorkerModeIcon16.png" />
+    <Resource Include="Resources\Icons\WorkerModeIcon32.png" />
   </ItemGroup>
 
 

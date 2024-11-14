@@ -3,36 +3,49 @@ using System.Windows.Media.Imaging;
 using Autodesk.Revit.UI;
 using Nice3point.Revit.Toolkit.External;
 using RevitTemplate.Commands;
+using RevitTemplate.Commands.Configure;
 using RevitTemplate.Commands.Settings;
+using RevitTemplate.Http.Service;
 
 namespace RevitTemplate;
 
 [UsedImplicitly]
 public class Application : ExternalApplication
 {
+    private static RibbonItem _workerModeButton;
+
     public override void OnStartup()
     {
+        Host.Start();
+        CreateRibbon();
+
         var arguments = Environment.GetCommandLineArgs();
         if (arguments.Contains("-workermode"))
         {
-            // TODO: start worker mode automatically
-        }
-        else
-        {
-            Host.Start();
-            CreateRibbon();
+            ToggleWorkerMode();
+            Host.LaunchServer();
         }
     }
 
-    private void CreateAltRibbon()
+    public static bool ToggleWorkerMode()
     {
-        SetupTestPanel();
-    }
+        if (_workerModeButton.ItemText.Equals("On"))
+        {
+            _workerModeButton.ItemText = "Off";
+            _workerModeButton.ToolTip = "Activate Worker Mode";
+            return false;
+        }
 
+        _workerModeButton.ItemText = "On";
+        _workerModeButton.ToolTip = "Deactivate Worker Mode";
+        return true;
+    }
+    
     private void CreateRibbon()
     {
         SetupTestPanel();
         SetupSettingsPanel();
+        SetupWorkerModePanel();
         SetupCommandsPanel();
     }
 
@@ -65,16 +78,28 @@ public class Application : ExternalApplication
         settingsPanel.AddStackedItems(dbSettingsButton, exportSettingsButton);
     }
 
+    private void SetupWorkerModePanel()
+    {
+        var workerModePanel = Application.CreatePanel("Worker Mode", "ASRR");
+        _workerModeButton = workerModePanel.AddPushButton<ActivateWorkerModeCommand>("Off")
+            .SetImage("/RevitTemplate;component/Resources/Icons/WorkerModeIcon16.png")
+            .SetLargeImage("/RevitTemplate;component/Resources/Icons/WorkerModeIcon32.png");
+
+        _workerModeButton.ToolTip = "Activate Worker Mode";
+    }
+
     private void SetupCommandsPanel()
     {
         var commandsPanel = Application.CreatePanel("Commands", "ASRR");
         // commandsPanel.AddPushButton<PlaceWallCommand>("Place Wall").ToolTip = "Place wall";
         commandsPanel.AddPushButton<ConfigureFacadeCommand>("Configure\r\nFacade")
+            .SetAvailabilityController<CommandAvailability>()
             .SetImage("/RevitTemplate;component/Resources/Icons/FacadeIcon16.png")
             .SetLargeImage("/RevitTemplate;component/Resources/Icons/FacadeIcon32.png")
             .ToolTip = "Configure facade by id";
 
         commandsPanel.AddPushButton<ConfigureProjectCommand>("Configure\r\nProject")
+            .SetAvailabilityController<CommandAvailability>()
             .SetImage("/RevitTemplate;component/Resources/Icons/ProjectIcon16.png")
             .SetLargeImage("/RevitTemplate;component/Resources/Icons/ProjectIcon32.png")
             .ToolTip = "Configure project by queue id";
@@ -94,7 +119,8 @@ public class Application : ExternalApplication
         {
             ToolTip = toolTip,
             Image = imagePath != null ? new BitmapImage(new Uri(imagePath, UriKind.Relative)) : null,
-            LargeImage = largeImagePath != null ? new BitmapImage(new Uri(largeImagePath, UriKind.Relative)) : null
+            LargeImage = largeImagePath != null ? new BitmapImage(new Uri(largeImagePath, UriKind.Relative)) : null,
+            AvailabilityClassName = typeof(CommandAvailability).FullName
         };
     }
 }

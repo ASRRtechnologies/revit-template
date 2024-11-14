@@ -4,6 +4,7 @@ using ASRR.Revit.Core.Http;
 using ASRR.Revit.Core.RevitModel;
 using Microsoft.Extensions.DependencyInjection;
 using RevitTemplate.Config;
+using RevitTemplate.Http.Service;
 using RevitTemplate.Services;
 using RevitTemplate.Settings;
 
@@ -14,6 +15,8 @@ namespace RevitTemplate;
 /// </summary>
 public static class Host
 {
+    private const string ServerBaseAddress = "http://localhost:4000/";
+    
     private static IServiceProvider _serviceProvider;
 
     private static readonly IPersistentStorageProvider PersistentStorageProvider =
@@ -29,12 +32,17 @@ public static class Host
         var services = new ServiceCollection();
 
         services.AddSerilogConfiguration();
-
-        // Setup storage and http services
-        SetupHttpClient();
+        
+        // Setup storage
         services.AddTransient(_ => PersistentStorageProvider);
-        services.AddTransient(_ => new HttpService(_httpClient));
 
+        // Setup http server for incoming requests
+        services.AddSingleton(_ => new HttpServer(ServerBaseAddress));
+        
+        // Setup http services for outgoing requests
+        SetupHttpClient();
+        services.AddTransient(_ => new HttpService(_httpClient));
+        
         // Add configurator services
         services.AddTransient(_ => new ModelFetcher(GetService<HttpService>()));
         services.AddTransient(_ => new FileUploader(GetService<HttpService>()));
@@ -54,11 +62,12 @@ public static class Host
         return _serviceProvider.GetRequiredService<T>();
     }
 
-    // public static void LaunchServer()
-    // {
-    //     
-    // }
-
+    public static void LaunchServer()
+    {
+        var httpServer = GetService<HttpServer>();
+        httpServer.Start();
+    }
+    
     private static void SetupHttpClient()
     {
         var databaseSettings = PersistentStorageProvider.Fetch<DatabaseSettings>();

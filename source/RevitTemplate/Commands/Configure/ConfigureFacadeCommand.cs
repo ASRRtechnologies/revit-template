@@ -7,21 +7,21 @@ using RevitTemplate.Services;
 using RevitTemplate.Settings;
 using RevitTemplate.UI;
 
-namespace RevitTemplate.Commands;
+namespace RevitTemplate.Commands.Configure;
 
 [UsedImplicitly]
 [Transaction(TransactionMode.Manual)]
-public class ConfigureProjectCommand : IExternalCommand
+public class ConfigureFacadeCommand : IExternalCommand
 {
     public Result Execute(ExternalCommandData commandData, ref string message, ElementSet elements)
     {
         var uiApp = commandData.Application;
-        var projectConfiguratorService = Host.GetService<ProjectConfiguratorService>();
+        var facadeConfigurationService = Host.GetService<FacadeConfiguratorService>();
         var persistentStorageProvider = Host.GetService<IPersistentStorageProvider>();
         var exportSettings = persistentStorageProvider.Fetch<ExportSettings>();
 
-        var input = new ManualConfigurationInput();
-        var result = input.ShowDialog();
+        var facadeConfigurationInput = new ManualConfigurationInput();
+        var result = facadeConfigurationInput.ShowDialog();
 
         if (result != true)
         {
@@ -30,7 +30,7 @@ public class ConfigureProjectCommand : IExternalCommand
 
         try
         {
-            projectConfiguratorService.Configure(uiApp, input.Id, exportSettings);
+            facadeConfigurationService.Configure(uiApp, facadeConfigurationInput.Id, exportSettings);
         }
         catch (ConfigurationException e)
         {
