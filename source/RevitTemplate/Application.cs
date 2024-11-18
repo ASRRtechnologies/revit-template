@@ -5,7 +5,6 @@ using Nice3point.Revit.Toolkit.External;
 using RevitTemplate.Commands;
 using RevitTemplate.Commands.Configure;
 using RevitTemplate.Commands.Settings;
-using RevitTemplate.Http.Service;
 
 namespace RevitTemplate;
 
@@ -48,7 +47,7 @@ public class Application : ExternalApplication
             _workerModeButton.ItemText = busy ? "On\r\nStatus: Busy" : "On\r\nStatus: Idle";
         }
     }
-    
+
     private void CreateRibbon()
     {
         SetupTestPanel();

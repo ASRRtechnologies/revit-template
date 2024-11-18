@@ -15,10 +15,11 @@ public class ExecuteRequestProcessor : RevitEventWrapper<RevitParameters>
             args.ExternalEventExecutor.Execute(app, args.QueueId);
             // _logger.Info(configurationStatus.CollectionPath + " External access");
         }
-        catch (Exception)
+        catch (Exception e)
         {
             serverStatus.Busy = false;
             serverStatus.ExceptionThrown = true;
+            Console.WriteLine(e.Message);
             Application.UpdateWorkerStatus(false);
         }
 

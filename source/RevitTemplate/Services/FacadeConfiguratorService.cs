@@ -45,6 +45,10 @@ public class FacadeConfiguratorService
         {
             throw new ConfigurationFailedException("Facade configuration failed. Configuration id is null");
         }
+        
+        var authResponse = _httpService.Get($"/auth/user-info");
+        if (!authResponse.IsSuccessStatusCode)
+            throw new ConfigurationFailedException("Failed to authenticate to API. Make sure API key is valid");
 
         var configuration = _httpService.GetForObject<FacadeConfigurationDto>($"/facade-configurations/find/{configId}")
                             ?? throw new ConfigurationFailedException(

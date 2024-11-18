@@ -43,6 +43,11 @@ public class ProjectConfiguratorService
             throw new ConfigurationFailedException("Configuration failed. Queue item id is null");
         }
 
+        var authResponse = _httpService.Get($"/auth/user-info");
+        if (!authResponse.IsSuccessStatusCode)
+            throw new ConfigurationFailedException("Failed to authenticate to API. Make sure API key is valid");
+
+
         var queueItem = _httpService.GetForObject<QueueItemDto>($"/queues/find/{queueId}")
                         ?? throw new ConfigurationFailedException(
                             $"Failed to fetch queue item with id '{queueId}' from db");
@@ -149,7 +154,7 @@ public class ProjectConfiguratorService
         var progress = status.Progress;
         var totalHouses = block.Houses.Count;
         var progressPerHouse = allottedProgress / totalHouses / 2;
-        
+
         var i = 1;
         foreach (var house in block.Houses)
         {
@@ -189,7 +194,7 @@ public class ProjectConfiguratorService
         var progress = status.Progress;
         var totalDynamicModels = house.DynamicModels.Count;
         var progressPerDynamicModel = allottedProgress / totalDynamicModels / 2;
-        
+
         var i = 1;
         foreach (var dynamicModel in house.DynamicModels)
         {
