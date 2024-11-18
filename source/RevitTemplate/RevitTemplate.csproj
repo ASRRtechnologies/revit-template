@@ -42,6 +42,8 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="ASRR.Core" Version="1.0.5" />
+    <PackageReference Include="ASRR.Revit.Core" Version="1.0.3" />
     <PackageReference Include="Nice3point.Revit.Build.Tasks" Version="2.*"/>
     <PackageReference Include="Nice3point.Revit.Toolkit" Version="$(RevitVersion).*"/>
     <PackageReference Include="Nice3point.Revit.Extensions" Version="$(RevitVersion).*"/>
@@ -49,12 +51,23 @@
     <PackageReference Include="Nice3point.Revit.Api.RevitAPIUI" Version="$(RevitVersion).*"/>
     <PackageReference Include="Serilog" Version="4.*"/>
     <PackageReference Include="Serilog.Sinks.Debug" Version="3.*"/>
-    <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="8.*"/>
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="7.0.0" />
+    <PackageReference Include="System.Net.Http" Version="4.3.4" />
   </ItemGroup>
 
   <ItemGroup>
     <Resource Include="Resources\Icons\RibbonIcon16.png"/>
     <Resource Include="Resources\Icons\RibbonIcon32.png"/>
+    <Resource Include="Resources\Icons\DbSettingsIcon16.png" />
+    <Resource Include="Resources\Icons\DbSettingsIcon32.png" />
+    <Resource Include="Resources\Icons\ExportSettingsIcon16.png" />
+    <Resource Include="Resources\Icons\ExportSettingsIcon32.png" />
+    <Resource Include="Resources\Icons\FacadeIcon16.png" />
+    <Resource Include="Resources\Icons\FacadeIcon32.png" />
+    <Resource Include="Resources\Icons\ProjectIcon16.png" />
+    <Resource Include="Resources\Icons\ProjectIcon32.png" />
+    <Resource Include="Resources\Icons\WorkerModeIcon16.png" />
+    <Resource Include="Resources\Icons\WorkerModeIcon32.png" />
   </ItemGroup>
 
 
