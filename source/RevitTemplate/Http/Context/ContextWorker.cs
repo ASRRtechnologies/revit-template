@@ -1,11 +1,16 @@
-﻿using RevitTemplate.Http.Service;
+﻿using RevitTemplate.Http.Model;
+using RevitTemplate.Http.RequestHandler;
+using RevitTemplate.Http.Service;
 
 namespace RevitTemplate.Http.Context;
 
-public class ContextWorker(ContextQueue contextQueue)
+public class ContextWorker(
+    ContextQueue contextQueue,
+    ServerStatus serverStatus,
+    ExecuteRequestProcessor requestProcessor,
+    IExternalEventExecutor externalEventExecutor)
 {
     private const int IdleSleepDuration = 300;
-    private readonly HttpRequestHandler _httpRequestHandler = new();
 
     public void Run()
     {
@@ -16,6 +21,7 @@ public class ContextWorker(ContextQueue contextQueue)
         }
 
         var context = contextQueue.Dequeue();
-        _httpRequestHandler.Process(context.Request, context.Response);
+        HttpRequestHandler.Process(context.Request, context.Response, serverStatus, requestProcessor,
+            externalEventExecutor);
     }
 }

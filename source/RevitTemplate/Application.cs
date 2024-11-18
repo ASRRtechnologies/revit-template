@@ -29,16 +29,24 @@ public class Application : ExternalApplication
 
     public static bool ToggleWorkerMode()
     {
-        if (_workerModeButton.ItemText.Equals("On"))
+        if (_workerModeButton.ItemText.StartsWith("On"))
         {
             _workerModeButton.ItemText = "Off";
             _workerModeButton.ToolTip = "Activate Worker Mode";
             return false;
         }
 
-        _workerModeButton.ItemText = "On";
+        _workerModeButton.ItemText = "On\r\nStatus: Idle";
         _workerModeButton.ToolTip = "Deactivate Worker Mode";
         return true;
+    }
+
+    public static void UpdateWorkerStatus(bool busy)
+    {
+        if (_workerModeButton.ItemText.StartsWith("On"))
+        {
+            _workerModeButton.ItemText = busy ? "On\r\nStatus: Busy" : "On\r\nStatus: Idle";
+        }
     }
     
     private void CreateRibbon()
@@ -81,7 +89,7 @@ public class Application : ExternalApplication
     private void SetupWorkerModePanel()
     {
         var workerModePanel = Application.CreatePanel("Worker Mode", "ASRR");
-        _workerModeButton = workerModePanel.AddPushButton<ActivateWorkerModeCommand>("Off")
+        _workerModeButton = workerModePanel.AddPushButton<ToggleWorkerModeCommand>("Off")
             .SetImage("/RevitTemplate;component/Resources/Icons/WorkerModeIcon16.png")
             .SetLargeImage("/RevitTemplate;component/Resources/Icons/WorkerModeIcon32.png");
 

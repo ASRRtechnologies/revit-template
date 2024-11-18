@@ -7,7 +7,7 @@ namespace RevitTemplate.Commands;
 
 [UsedImplicitly]
 [Transaction(TransactionMode.Manual)]
-public class ActivateWorkerModeCommand : IExternalCommand
+public class ToggleWorkerModeCommand : IExternalCommand
 {
     public Result Execute(ExternalCommandData commandData, ref string message, ElementSet elements)
     {
@@ -24,7 +24,7 @@ public class ActivateWorkerModeCommand : IExternalCommand
             else
             {
                 httpServer.Stop();
-                Console.WriteLine("Server turned off.");
+                Console.WriteLine("Server has been stopped.");
             }
         }
         catch (Exception e)

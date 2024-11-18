@@ -36,16 +36,16 @@ public class ProjectConfiguratorService
         Directory.CreateDirectory(_dynamicModelDestinationFolder);
     }
 
-    public void Configure(UIApplication uiApp, string queueItemId, ExportSettings exportSettings)
+    public void Configure(UIApplication uiApp, string queueId, ExportSettings exportSettings)
     {
-        if (queueItemId == null)
+        if (queueId == null)
         {
             throw new ConfigurationFailedException("Configuration failed. Queue item id is null");
         }
 
-        var queueItem = _httpService.GetForObject<QueueItemDto>($"/queues/find/{queueItemId}")
+        var queueItem = _httpService.GetForObject<QueueItemDto>($"/queues/find/{queueId}")
                         ?? throw new ConfigurationFailedException(
-                            $"Failed to fetch queue item with id '{queueItemId}' from db");
+                            $"Failed to fetch queue item with id '{queueId}' from db");
 
         var status = new ProjectConfigurationStatus()
         {
@@ -54,12 +54,12 @@ public class ProjectConfiguratorService
         };
 
         var started =
-            _httpService.PostForObject<QueueItemDto, ProjectConfigurationStatus>($"/queues/job/{queueItemId}", status);
+            _httpService.PostForObject<QueueItemDto, ProjectConfigurationStatus>($"/queues/job/{queueId}", status);
 
         if (started == null)
         {
             throw new ConfigurationFailedException(
-                $"Failed to start job for queue item '{queueItemId}'. Make sure job is not locked");
+                $"Failed to start job for queue item '{queueId}'. Make sure job is not locked");
         }
 
         try
@@ -75,7 +75,7 @@ public class ProjectConfiguratorService
                 Type = e.GetType().Name
             };
             status.Exception = exception;
-            PostStatus(queueItemId, status);
+            PostStatus(queueId, status);
             throw;
         }
     }

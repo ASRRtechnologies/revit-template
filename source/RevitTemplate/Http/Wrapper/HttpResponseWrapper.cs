@@ -1,30 +1,20 @@
 ﻿using System.Net;
 using System.Text;
+using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using Newtonsoft.Json.Serialization;
+using RevitTemplate.Http.RequestHandler;
 using RevitTemplate.Http.Service;
 
 namespace RevitTemplate.Http.Wrapper;
 
-public class HttpResponseWrapper
+public class HttpResponseWrapper(HttpListenerResponse response)
 {
-    private readonly HttpListenerResponse _response;
     private bool _responded;
-
-    public HttpResponseWrapper(HttpListenerResponse response)
-    {
-        _response = response;
-        _responded = false;
-    }
-
-    public bool HasResponded()
-    {
-        return _responded;
-    }
     
     public void AddHeader(string key, string value)
     {
-        _response.AddHeader(key, value);
+        response.AddHeader(key, value);
     }
     
     public void WriteError(HttpStatusCode statusCode, string message)
@@ -43,6 +33,20 @@ public class HttpResponseWrapper
         WriteRequest(statusCode, body);
     }
 
+    public void WriteBody(object body)
+    {
+        var serializer = new JsonSerializer()
+        {
+            ContractResolver = new CamelCasePropertyNamesContractResolver()
+        };
+        WriteBody(JObject.FromObject(body, serializer));
+    }
+
+    public void WriteBody(JObject jObject)
+    {
+        WriteRequest(HttpStatusCode.OK, jObject);
+    }
+    
     public void WriteRequest(HttpStatusCode statusCode, JObject body)
     {
         if (_responded)
@@ -54,10 +58,10 @@ public class HttpResponseWrapper
         try
         {
             var buffer = Encoding.UTF8.GetBytes(body.ToString());
-            _response.StatusCode = (int) statusCode;
-            _response.ContentType = HttpRequestHandler.JsonMimeType;
-            _response.ContentLength64 = buffer.Length;
-            _response.OutputStream.Write(buffer, 0, buffer.Length);
+            response.StatusCode = (int) statusCode;
+            response.ContentType = HttpRequestHandler.JsonMimeType;
+            response.ContentLength64 = buffer.Length;
+            response.OutputStream.Write(buffer, 0, buffer.Length);
             _responded = true;
         }
         catch (Exception e)
